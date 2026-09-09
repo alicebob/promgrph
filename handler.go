@@ -42,12 +42,35 @@ func (c *Client) MakeSVGHandler(expr string) http.HandlerFunc {
 			w.Write([]byte("failed"))
 		}
 
+		var xTicks []AxisTick
+		period := 10 * time.Minute
+		for t := q.Start.Truncate(period); !t.After(q.End); t = t.Add(period) {
+			if !t.Before(q.Start) {
+				xTicks = append(xTicks, AxisTick{int(t.Unix()), t.Format("15:04")})
+			}
+		}
+
 		g := Graph{
 			Width:  400,
 			Height: 200,
 			Title:  "My first query!",
-			YAxis:  []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
-			XAxis:  []int{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24},
+			YAxis: Axis{
+				Label: "Numbers!",
+				Ticks: []AxisTick{
+					{V: 0, Label: "0"},
+					{V: 1, Label: "1"},
+					{V: 2, Label: "2"},
+					{V: 3, Label: "3"},
+					{V: 4, Label: "4"},
+					{V: 5, Label: "5"},
+				},
+			},
+			XAxis: Axis{
+				Start: int(q.Start.Unix()),
+				End:   int(q.End.Unix()),
+				Label: "Time!",
+				Ticks: xTicks,
+			},
 		}
 		for _, r := range resp {
 			l := Line{
@@ -56,19 +79,23 @@ func (c *Client) MakeSVGHandler(expr string) http.HandlerFunc {
 				Label: r.Metric.Name,
 			}
 			for _, v := range r.Values {
-				val, _ := strconv.Atoi(v[1].(string)) // FIXME
+				val, _ := strconv.Atoi(v[1].(string))
 				x := interp(
 					v[0].(float64),
 					float64(q.Start.Unix()),
 					float64(q.End.Unix()),
-					g.XAxis[0],
-					g.XAxis[len(g.XAxis)-1],
+					g.XAxis.Start,
+					g.XAxis.End,
 				)
-				y := val // FIXME
+				y := val
 				l.Points = append(l.Points, [2]int{x, y})
 			}
 			g.Lines = append(g.Lines, l)
 		}
+
+		yMin, yMax := computeYBounds(g.Lines)
+		g.YAxis.Start = yMin
+		g.YAxis.End = yMax
 
 		w.Header().Set("Content-Type", "image/svg+xml")
 		renderSVG(w, g)
@@ -148,8 +175,4 @@ func (c *Client) runQuery(ctx context.Context, q promQuery) ([]QueryResult, erro
 		return nil, fmt.Errorf("unexpected result type: %s", payload.Data.ResultType)
 	}
 	return payload.Data.Result, nil
-}
-
-func interp(v, inMin, inMax float64, outMin, outMax int) int {
-	return outMin + int((v-inMin)*float64(outMax-outMin)/(inMax-inMin))
 }
