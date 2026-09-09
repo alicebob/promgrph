@@ -14,12 +14,12 @@ func TestMakeSVGHandler(t *testing.T) {
 	c := NewClient(prom.URL)
 
 	m := http.NewServeMux()
-	m.Handle("GET /graph.png", c.MakeSVGHandler("foobar"))
+	m.Handle("GET /graph.svg", c.MakeSVGHandler("foobar"))
 	s := httptest.NewTestServer(t, m)
 	ch := s.Client()
 
 	t.Run("basic graph", func(t *testing.T) {
-		resp, err := ch.Get("http://localhost/graph.png")
+		resp, err := ch.Get("http://localhost/graph.svg")
 		must.NoError(t, err)
 		body, _ := io.ReadAll(resp.Body)
 		t.Logf("body: %s", body)
