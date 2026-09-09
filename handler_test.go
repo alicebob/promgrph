@@ -23,6 +23,6 @@ func TestMakeSVGHandler(t *testing.T) {
 		must.NoError(t, err)
 		body, _ := io.ReadAll(resp.Body)
 		t.Logf("body: %s", body)
-		must.Eq(t, "image/svg", resp.Header.Get("content-type"))
+		must.Eq(t, "image/svg+xml", resp.Header.Get("content-type"))
 	})
 }

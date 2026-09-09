@@ -44,7 +44,7 @@ func (c *Client) MakeSVGHandler(expr string) http.HandlerFunc {
 		}
 		_ = resp
 
-		w.Header().Set("Content-type", "image/svg")
+		w.Header().Set("Content-Type", "image/svg+xml")
 		renderSVG(w, g)
 		// w.Write([]byte(fmt.Sprintf("very much todo: %#v", resp)))
 	}
