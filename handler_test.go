@@ -1,0 +1,25 @@
+package promgrph
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/shoenig/test/must"
+)
+
+func TestMakeSVGHandler(t *testing.T) {
+	prom := NewFakeProm(t)
+	c := NewClient(prom.URL)
+
+	m := http.NewServeMux()
+	m.Handle("GET /graph.png", c.MakeSVGHandler("foobar"))
+	s := httptest.NewTestServer(t, m)
+	ch := s.Client()
+
+	t.Run("basic graph", func(t *testing.T) {
+		resp, err := ch.Get("http://localhost/graph.png")
+		must.NoError(t, err)
+		must.Eq(t, "image/svg", resp.Header.Get("content-type"))
+	})
+}
