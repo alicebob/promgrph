@@ -5,13 +5,21 @@ import (
 	"io"
 )
 
-type Graph struct {
-	Width  int
-	Height int
-	Title  string
-	YAxis  []int
-	XAxis  []int
-}
+type (
+	Graph struct {
+		Width  int
+		Height int
+		Title  string
+		YAxis  []int
+		XAxis  []int
+		Lines  []Line
+	}
+	Line struct {
+		Color  string
+		Label  string
+		Points [][2]int
+	}
+)
 
 func renderSVG(w io.Writer, g Graph) error {
 	const (
@@ -80,7 +88,7 @@ func renderSVG(w io.Writer, g Graph) error {
 
 	// Draw X axis ticks
 	for i, x := range g.XAxis {
-		xPos := leftPad + (i * graphWidth / (len(g.XAxis)-1))
+		xPos := leftPad + (i * graphWidth / (len(g.XAxis) - 1))
 		_, err = fmt.Fprintf(w, `
     <g class="tick">
       <line x1="%d" y1="%d" x2="%d" y2="%d"/>
@@ -88,6 +96,32 @@ func renderSVG(w io.Writer, g Graph) error {
     </g>`,
 			xPos, graphBottom, xPos, graphBottom+5,
 			xPos, graphBottom+20, x)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Draw lines
+	maxX := g.XAxis[len(g.XAxis)-1]
+	maxY := g.YAxis[len(g.YAxis)-1]
+	for _, line := range g.Lines {
+		_, err = fmt.Fprintf(w, "\n  <path class=\"line\" stroke=\"%s\" stroke-width=\"2\" fill=\"none\" d=\"", line.Color)
+		if err != nil {
+			return err
+		}
+		for i, p := range line.Points {
+			x := leftPad + (p[0] * graphWidth / maxX)
+			y := graphTop + graphHeight - (p[1] * graphHeight / maxY)
+			if i == 0 {
+				_, err = fmt.Fprintf(w, "M %d %d", x, y)
+			} else {
+				_, err = fmt.Fprintf(w, " L %d %d", x, y)
+			}
+			if err != nil {
+				return err
+			}
+		}
+		_, err = fmt.Fprint(w, "\"/>\n")
 		if err != nil {
 			return err
 		}
