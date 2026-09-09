@@ -35,8 +35,18 @@ func (c *Client) MakeSVGHandler(expr string) http.HandlerFunc {
 			w.Write([]byte("failed"))
 		}
 
+		g := Graph{
+			Width:  400,
+			Height: 200,
+			Title:  "My first query!",
+			YAxis:  []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+			XAxis:  []int{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24},
+		}
+		_ = resp
+
 		w.Header().Set("Content-type", "image/svg")
-		w.Write([]byte(fmt.Sprintf("very much todo: %#v", resp)))
+		renderSVG(w, g)
+		// w.Write([]byte(fmt.Sprintf("very much todo: %#v", resp)))
 	}
 }
 
