@@ -16,6 +16,7 @@ type (
 	}
 	Line struct {
 		Color  string
+		Fill   bool // fill in the area under the line?
 		Label  string
 		Points [][2]int
 	}
@@ -105,7 +106,32 @@ func renderSVG(w io.Writer, g Graph) error {
 	maxX := g.XAxis[len(g.XAxis)-1]
 	maxY := g.YAxis[len(g.YAxis)-1]
 	for _, line := range g.Lines {
-		_, err = fmt.Fprintf(w, "\n  <path class=\"line\" stroke=\"%s\" stroke-width=\"2\" fill=\"none\" d=\"", line.Color)
+		// Draw fill area if enabled
+		if line.Fill && len(line.Points) > 0 {
+			firstX := leftPad + (line.Points[0][0] * graphWidth / maxX)
+			firstY := graphTop + graphHeight - (line.Points[0][1] * graphHeight / maxY)
+			_, err = fmt.Fprintf(w, "\n  <path d=\"M %d %d", firstX, firstY)
+			if err != nil {
+				return err
+			}
+			for _, p := range line.Points[1:] {
+				x := leftPad + (p[0] * graphWidth / maxX)
+				y := graphTop + graphHeight - (p[1] * graphHeight / maxY)
+				_, err = fmt.Fprintf(w, " L %d %d", x, y)
+				if err != nil {
+					return err
+				}
+			}
+			lastX := leftPad + (line.Points[len(line.Points)-1][0] * graphWidth / maxX)
+			_, err = fmt.Fprintf(w, " L %d %d L %d %d Z\" fill=\"%s\" fill-opacity=\"0.2\"/>\n",
+				lastX, graphBottom, firstX, graphBottom, line.Color)
+			if err != nil {
+				return err
+			}
+		}
+
+		// Draw line
+		_, err = fmt.Fprintf(w, "  <path class=\"line\" stroke=\"%s\" stroke-width=\"2\" fill=\"none\" d=\"", line.Color)
 		if err != nil {
 			return err
 		}

@@ -52,6 +52,7 @@ func (c *Client) MakeSVGHandler(expr string) http.HandlerFunc {
 		for _, r := range resp {
 			l := Line{
 				Color: "green", // FIXME
+				Fill:  true,
 				Label: r.Metric.Name,
 			}
 			for _, v := range r.Values {
