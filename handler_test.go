@@ -1,6 +1,7 @@
 package promgrph
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -20,6 +21,8 @@ func TestMakeSVGHandler(t *testing.T) {
 	t.Run("basic graph", func(t *testing.T) {
 		resp, err := ch.Get("http://localhost/graph.png")
 		must.NoError(t, err)
+		body, _ := io.ReadAll(resp.Body)
+		t.Logf("body: %s", body)
 		must.Eq(t, "image/svg", resp.Header.Get("content-type"))
 	})
 }
