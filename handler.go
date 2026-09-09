@@ -54,17 +54,6 @@ func (c *Client) MakeSVGHandler(expr string) http.HandlerFunc {
 			Width:  400,
 			Height: 200,
 			Title:  "My first query!",
-			YAxis: Axis{
-				Label: "Numbers!",
-				Ticks: []AxisTick{
-					{V: 0, Label: "0"},
-					{V: 1, Label: "1"},
-					{V: 2, Label: "2"},
-					{V: 3, Label: "3"},
-					{V: 4, Label: "4"},
-					{V: 5, Label: "5"},
-				},
-			},
 			XAxis: Axis{
 				Start: int(q.Start.Unix()),
 				End:   int(q.End.Unix()),
@@ -94,8 +83,24 @@ func (c *Client) MakeSVGHandler(expr string) http.HandlerFunc {
 		}
 
 		yMin, yMax := computeYBounds(g.Lines)
-		g.YAxis.Start = yMin
-		g.YAxis.End = yMax
+		ticks := niceTicks(yMin, yMax, 5)
+		
+		// Adjust YAxis range to cover all ticks (niceTicks may extend beyond data)
+		if len(ticks) > 0 {
+			if ticks[0].V < yMin {
+				yMin = ticks[0].V
+			}
+			if ticks[len(ticks)-1].V > yMax {
+				yMax = ticks[len(ticks)-1].V
+			}
+		}
+		
+		g.YAxis = Axis{
+			Start: yMin,
+			End:   yMax,
+			Label: "Numbers!",
+			Ticks: ticks,
+		}
 
 		w.Header().Set("Content-Type", "image/svg+xml")
 		renderSVG(w, g)

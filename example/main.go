@@ -17,6 +17,8 @@ func main() {
 
 	m := http.NewServeMux()
 	m.Handle("GET /graph.svg", c.MakeSVGHandler("up"))
+	m.Handle("GET /alloc.svg", c.MakeSVGHandler("go_memstats_alloc_bytes"))
+	m.Handle("GET /free.svg", c.MakeSVGHandler("rate(go_memstats_frees_total[5m])"))
 	m.HandleFunc("GET /", indexHandler)
 	fmt.Printf("at: %s\n", listen)
 	if err := (&http.Server{Handler: m, Addr: listen}).ListenAndServe(); err != nil {
