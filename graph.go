@@ -7,12 +7,13 @@ import (
 
 type (
 	Graph struct {
-		Width  int
-		Height int
-		Title  string
-		YAxis  Axis
-		XAxis  Axis
-		Lines  []Line
+		Width   int
+		Height  int
+		Title   string
+		YAxis   Axis
+		XAxis   Axis
+		Stacked bool
+		Lines   []Line
 	}
 	Axis struct {
 		Label string

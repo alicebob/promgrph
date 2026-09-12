@@ -15,6 +15,9 @@ func (c *Client) TemplateFuncMap() template.FuncMap {
 		"height": func(n int) Option {
 			return func(a *GraphArgs) { a.Height = n }
 		},
+		"stacked": func() Option {
+			return func(a *GraphArgs) { a.Stacked = true }
+		},
 	}
 }
 
@@ -22,8 +25,9 @@ type (
 	Option func(*GraphArgs)
 
 	GraphArgs struct {
-		Width  int
-		Height int
+		Width   int
+		Height  int
+		Stacked bool
 	}
 )
 
@@ -46,6 +50,9 @@ func (c *Client) templGraph(path string, opts ...Option) template.HTML {
 		if args.Height > 0 {
 			attrs += fmt.Sprintf(` height="%d"`, args.Height)
 			u.Set("height", fmt.Sprintf("%d", args.Height))
+		}
+		if args.Stacked {
+			u.Set("stacked", "true")
 		}
 	}
 	return template.HTML(fmt.Sprintf(`<img src="%s?%s"%s>`, path, u.Encode(), attrs))

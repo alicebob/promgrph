@@ -21,6 +21,7 @@ var colorScheme = []string{
 // options:
 //   - width: in pixels
 //   - height: in pixels
+//   - stacked: "true"
 func (c *Client) MakeSVGHandler(expr string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -33,6 +34,7 @@ func (c *Client) MakeSVGHandler(expr string) http.HandlerFunc {
 		if !ok {
 			return
 		}
+		stacked := r.FormValue("stacked") == "true"
 
 		q := promQuery{
 			Expr:  expr,
@@ -55,9 +57,10 @@ func (c *Client) MakeSVGHandler(expr string) http.HandlerFunc {
 		}
 
 		g := Graph{
-			Width:  width,
-			Height: height,
-			Title:  "My first query!",
+			Width:   width,
+			Height:  height,
+			Title:   "My first query!",
+			Stacked: stacked,
 			XAxis: Axis{
 				Start: int(q.Start.Unix()),
 				End:   int(q.End.Unix()),
@@ -66,13 +69,7 @@ func (c *Client) MakeSVGHandler(expr string) http.HandlerFunc {
 			},
 		}
 		for i, r := range resp {
-			label := r.Metric.Job
-			if r.Metric.Instance != "" {
-				if label != "" {
-					label += ":"
-				}
-				label += r.Metric.Instance
-			}
+			label := r.Metric.Name
 			if label == "" {
 				label = fmt.Sprintf("line%d", i+1)
 			}

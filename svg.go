@@ -100,10 +100,26 @@ func renderSVG(w io.Writer, g Graph) error {
 		}
 	}
 
+
+
 	// Draw lines
 	xRange := g.XAxis.End - g.XAxis.Start
 	yRange := g.YAxis.End - g.YAxis.Start
-	for _, line := range g.Lines {
+	
+	// Stack line points if requested (cumulative Y values)
+	if g.Stacked {
+		for i := 1; i < len(g.Lines); i++ {
+			prev := &g.Lines[i-1]
+			curr := &g.Lines[i]
+			if len(prev.Points) == len(curr.Points) {
+				for j := range curr.Points {
+					curr.Points[j][1] += prev.Points[j][1]
+				}
+			}
+		}
+	}
+	
+	for i, line := range g.Lines {
 		// Draw fill area if enabled
 		if line.Fill && len(line.Points) > 0 {
 			firstX := leftPad + ((line.Points[0][0] - g.XAxis.Start) * graphWidth / xRange)
@@ -121,10 +137,37 @@ func renderSVG(w io.Writer, g Graph) error {
 				}
 			}
 			lastX := leftPad + ((line.Points[len(line.Points)-1][0] - g.XAxis.Start) * graphWidth / xRange)
-			_, err = fmt.Fprintf(w, " L %d %d L %d %d Z\" fill=\"%s\" fill-opacity=\"0.2\"/>\n",
-				lastX, graphBottom, firstX, graphBottom, line.Color)
-			if err != nil {
-				return err
+			// For stacked lines, fill down to previous line; for non-stacked or first line, fill to graph bottom
+			if g.Stacked && i > 0 {
+				prevLine := &g.Lines[i-1]
+				if len(prevLine.Points) > 0 {
+					prevFirstY := graphTop + graphHeight - ((prevLine.Points[0][1] - g.YAxis.Start) * graphHeight / yRange)
+					prevLastY := graphTop + graphHeight - ((prevLine.Points[len(prevLine.Points)-1][1] - g.YAxis.Start) * graphHeight / yRange)
+					_, err = fmt.Fprintf(w, " L %d %d", lastX, prevLastY)
+					if err != nil {
+						return err
+					}
+					// Reverse through prev line points
+					for j := len(prevLine.Points) - 2; j >= 0; j-- {
+						px := leftPad + ((prevLine.Points[j][0] - g.XAxis.Start) * graphWidth / xRange)
+						py := graphTop + graphHeight - ((prevLine.Points[j][1] - g.YAxis.Start) * graphHeight / yRange)
+						_, err = fmt.Fprintf(w, " L %d %d", px, py)
+						if err != nil {
+							return err
+						}
+					}
+					_, err = fmt.Fprintf(w, " L %d %d Z\" fill=\"%s\" fill-opacity=\"0.2\"/>\n", firstX, prevFirstY, line.Color)
+					if err != nil {
+						return err
+					}
+				}
+			} else {
+				// Non-stacked or first line: fill to graph bottom
+				_, err = fmt.Fprintf(w, " L %d %d L %d %d Z\" fill=\"%s\" fill-opacity=\"0.2\"/>\n",
+					lastX, graphBottom, firstX, graphBottom, line.Color)
+				if err != nil {
+					return err
+				}
 			}
 		}
 
