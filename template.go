@@ -12,6 +12,9 @@ func (c *Client) TemplateFuncMap() template.FuncMap {
 		"width": func(n int) Option {
 			return func(a *GraphArgs) { a.Width = n }
 		},
+		"height": func(n int) Option {
+			return func(a *GraphArgs) { a.Height = n }
+		},
 	}
 }
 
@@ -39,6 +42,10 @@ func (c *Client) templGraph(path string, opts ...Option) template.HTML {
 		if args.Width > 0 {
 			attrs += fmt.Sprintf(` width="%d"`, args.Width)
 			u.Set("width", fmt.Sprintf("%d", args.Width))
+		}
+		if args.Height > 0 {
+			attrs += fmt.Sprintf(` height="%d"`, args.Height)
+			u.Set("height", fmt.Sprintf("%d", args.Height))
 		}
 	}
 	return template.HTML(fmt.Sprintf(`<img src="%s?%s"%s>`, path, u.Encode(), attrs))

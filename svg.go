@@ -7,7 +7,7 @@ import (
 
 func renderSVG(w io.Writer, g Graph) error {
 	const (
-		leftPad   = 40
+		leftPad   = 60
 		topPad    = 30
 		bottomPad = 25
 		rightPad  = 10
@@ -56,10 +56,10 @@ func renderSVG(w io.Writer, g Graph) error {
 		_, err = fmt.Fprintf(w, `
     <g class="tick">
       <line x1="%d" y1="%d" x2="%d" y2="%d"/>
-      <text x="%d" y="%d">%s</text>
+      <text x="%d" y="%d" style="text-anchor: end">%s</text>
     </g>`,
 			leftPad-5, yPos, leftPad, yPos,
-			leftPad-15, yPos+4, label)
+			leftPad-10, yPos+4, label)
 		if err != nil {
 			return err
 		}
