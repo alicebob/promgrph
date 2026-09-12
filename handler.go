@@ -8,6 +8,11 @@ import (
 	"time"
 )
 
+var colorScheme = []string{
+	"#4E79A7", "#F28E2B", "#E15759", "#76B7B2", "#59A14F",
+	"#EDC948", "#B07AA1", "#FF9DA7", "#9C755F", "#BAB0AC",
+}
+
 // Returns the actual graphs.
 // Usage:
 //
@@ -60,11 +65,21 @@ func (c *Client) MakeSVGHandler(expr string) http.HandlerFunc {
 				Ticks: xTicks,
 			},
 		}
-		for _, r := range resp {
+		for i, r := range resp {
+			label := r.Metric.Job
+			if r.Metric.Instance != "" {
+				if label != "" {
+					label += ":"
+				}
+				label += r.Metric.Instance
+			}
+			if label == "" {
+				label = fmt.Sprintf("line%d", i+1)
+			}
 			l := Line{
-				Color: "green", // FIXME
+				Color: colorScheme[i%len(colorScheme)],
 				Fill:  true,
-				Label: r.Metric.Name,
+				Label: label,
 			}
 			for _, v := range r.Values {
 				val, _ := strconv.Atoi(v[1].(string))
