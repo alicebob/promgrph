@@ -7,15 +7,20 @@ import (
 
 func renderSVG(w io.Writer, g Graph) error {
 	const (
-		leftPad   = 60
-		topPad    = 30
-		bottomPad = 25
-		rightPad  = 10
+		leftPad     = 60
+		topPad      = 30
+		bottomPad   = 25
+		rightPad    = 25
+		legendGap   = 10
+		legendWidth = 119
+		legendPadX  = 10
+		legendPadY  = 8
 	)
-	graphWidth := g.Width - leftPad - rightPad
+	graphWidth := g.Width - leftPad - legendGap - legendWidth - rightPad
 	graphHeight := g.Height - topPad - bottomPad
 	graphTop := topPad
 	graphBottom := g.Height - bottomPad
+	legendX := leftPad + graphWidth + legendGap
 
 	_, err := fmt.Fprintf(w, `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">
@@ -25,6 +30,8 @@ func renderSVG(w io.Writer, g Graph) error {
     .axis { stroke: #000000; stroke-width: 1px; }
     .tick { stroke: #cccccc; stroke-width: 1px; }
     .tick text { font-family: sans-serif; font-size: 12px; text-anchor: middle; }
+    .legend { font-family: sans-serif; font-size: 12px; }
+    .legend-color { width: 12px; height: 12px; }
   </style>
   <rect class="background" x="0" y="0" width="%d" height="%d"/>
   <text class="title" x="%d" y="20">%s</text>
@@ -69,7 +76,7 @@ func renderSVG(w io.Writer, g Graph) error {
 	_, err = fmt.Fprintf(w, `<g class="axis">
     <line x1="%d" y1="%d" x2="%d" y2="%d"/>
   </g>
-`, leftPad, graphBottom, g.Width-rightPad, graphBottom)
+`, leftPad, graphBottom, leftPad+graphWidth, graphBottom)
 	if err != nil {
 		return err
 	}
@@ -143,6 +150,44 @@ func renderSVG(w io.Writer, g Graph) error {
 			return err
 		}
 	}
+
+	// Draw legend on the right
+	legendBgHeight := g.Height - topPad - bottomPad
+	legendY := graphTop + legendPadY
+	_, err = fmt.Fprintf(w, `
+  <defs>
+    <clipPath id="legendClip">
+      <rect x="%d" y="%d" width="%d" height="%d" rx="4" ry="4"/>
+    </clipPath>
+  </defs>
+  <g class="legend-bg" clip-path="url(#legendClip)">
+    <rect x="%d" y="%d" width="%d" height="%d" rx="4" ry="4" fill="#f5f5f5" fill-opacity="0.8"/>
+`,
+		legendX, graphTop, legendWidth, legendBgHeight,
+		legendX, graphTop, legendWidth, legendBgHeight)
+	if err != nil {
+		return err
+	}
+	for _, line := range g.Lines {
+		if line.Label == "" {
+			continue
+		}
+		_, err = fmt.Fprintf(w, `
+    <g class="legend">
+      <rect class="legend-color" x="%d" y="%d" rx="2" ry="2" fill="%s"/>
+      <text x="%d" y="%d" style="text-anchor: start; dominant-baseline: central">%s</text>
+    </g>`,
+			legendX+10, legendY, line.Color,
+			legendX+24, legendY+6, line.Label)
+		if err != nil {
+			return err
+		}
+		legendY += 20
+	}
+	_, err = fmt.Fprintf(w, "\n  </g>")
+		if err != nil {
+			return err
+		}
 
 	_, err = fmt.Fprint(w, `</svg>`)
 	return err
