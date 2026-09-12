@@ -1,6 +1,7 @@
 package promgrph
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -11,10 +12,23 @@ import (
 // Usage:
 //
 //	m.HandleFunc("GET /cpuload.png", c.MakeSVGHandler("node_cpu_seconds_total[5m]"))
+//
+// options:
+//   - width: in pixels
+//   - height: in pixels
 func (c *Client) MakeSVGHandler(expr string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		now := time.Now().UTC()
+		width, ok := readInt(w, r, "width", 400)
+		if !ok {
+			return
+		}
+		height, ok := readInt(w, r, "height", 200)
+		if !ok {
+			return
+		}
+
 		q := promQuery{
 			Expr:  expr,
 			Start: now.Add(-time.Hour),
@@ -36,8 +50,8 @@ func (c *Client) MakeSVGHandler(expr string) http.HandlerFunc {
 		}
 
 		g := Graph{
-			Width:  400,
-			Height: 200,
+			Width:  width,
+			Height: height,
 			Title:  "My first query!",
 			XAxis: Axis{
 				Start: int(q.Start.Unix()),
@@ -91,4 +105,19 @@ func (c *Client) MakeSVGHandler(expr string) http.HandlerFunc {
 		renderSVG(w, g)
 		// w.Write([]byte(fmt.Sprintf("very much todo: %#v", resp)))
 	}
+}
+
+// returns the value and ok.
+func readInt(w http.ResponseWriter, r *http.Request, field string, def int) (int, bool) {
+	s := r.FormValue(field)
+	if s == "" {
+		return def, true
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil || n <= 0 {
+		w.WriteHeader(400)
+		fmt.Fprintf(w, "invalid value for argument %q", field)
+		return 0, false
+	}
+	return n, true
 }
