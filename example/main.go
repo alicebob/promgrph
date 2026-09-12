@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"text/template"
 
 	"github.com/alicebob/promgrph"
 )
@@ -19,21 +20,25 @@ func main() {
 	m.Handle("GET /graph.svg", c.MakeSVGHandler("up"))
 	m.Handle("GET /alloc.svg", c.MakeSVGHandler("go_memstats_alloc_bytes"))
 	m.Handle("GET /free.svg", c.MakeSVGHandler("rate(go_memstats_frees_total[5m])"))
-	m.HandleFunc("GET /", indexHandler)
+	m.HandleFunc("GET /", indexHandler(c))
 	fmt.Printf("at: %s\n", listen)
 	if err := (&http.Server{Handler: m, Addr: listen}).ListenAndServe(); err != nil {
 		fmt.Printf("httpd: %s\n", err)
 	}
 }
 
-func indexHandler(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte(`
+func indexHandler(c *promgrph.Client) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		template.Must(template.New("index").Funcs(c.TemplateFuncMap()).Parse(`
 <html>
 <head>
 </head>
 <body>
-	<img src="./graph.svg">
+	{{graph "/graph.svg" (width 400) }}<br>
+	{{graph "/alloc.svg" (width 400) }}<br>
+	{{graph "/free.svg" (width 400) }}<br>
 </body>
 </html>
-`))
+`)).Execute(w, nil)
+	}
 }
