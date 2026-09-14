@@ -9,7 +9,7 @@ Goal:
 
 ## Status
 
-Proof of concept. You can get some basic graphs, and the template idea works.
+Don't use, minimal proof of concept. You can get some basic graphs, and the template idea works, but that's it.
 
 
 ## AI
