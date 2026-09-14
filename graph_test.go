@@ -32,10 +32,10 @@ func TestFormatValue(t *testing.T) {
 
 func TestNiceTicks(t *testing.T) {
 	tests := []struct {
-		name     string
+		name       string
 		vmin, vmax int
-		maxTicks int
-		want     []int // just check the V values
+		maxTicks   int
+		want       []int // just check the V values
 	}{
 		{
 			name:     "zero range",
