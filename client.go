@@ -28,13 +28,14 @@ type (
 		End   time.Time
 	}
 
+	Metric struct {
+		Name     string `json:"__name__"`
+		Job      string `json:"job"`
+		Instance string `json:"instance"`
+	}
 	MeasurePoint [2]any // is: '[ 1435781430.781, "1" ]'
 	QueryResult  struct {
-		Metric struct {
-			Name     string `json:"__name__"`
-			Job      string `json:"job"`
-			Instance string `json:"instance"`
-		} `json:"metric"`
+		Metric Metric         `json:"metric"`
 		Values []MeasurePoint `json:"values"`
 	}
 	QueryRangeResult struct {

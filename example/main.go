@@ -17,7 +17,7 @@ func main() {
 	c := promgrph.NewClient(prom)
 
 	m := http.NewServeMux()
-	m.Handle("GET /graph.svg", c.MakeSVGHandler("up", promgrph.GraphOpts{Title: "<b>up</b>", Stacked: true}))
+	m.Handle("GET /graph.svg", c.MakeSVGHandler("up", promgrph.GraphOpts{Title: "<b>up</b>", Stacked: true, Legend: "Up!<b>b"}))
 	m.Handle("GET /alloc.svg", c.MakeSVGHandler("go_memstats_alloc_bytes", promgrph.GraphOpts{Title: "alloc"}))
 	m.Handle("GET /free.svg", c.MakeSVGHandler("rate(go_memstats_frees_total[5m])", promgrph.GraphOpts{Title: "frees"}))
 	m.HandleFunc("GET /", indexHandler(c))

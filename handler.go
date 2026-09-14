@@ -16,6 +16,7 @@ var colorScheme = []string{
 type GraphOpts struct {
 	Title   string
 	Stacked bool
+	Legend  string // default if empty, otherwise something fixed
 }
 
 // Returns the actual graphs.
@@ -74,14 +75,10 @@ func (c *Client) MakeSVGHandler(expr string, opts GraphOpts) http.HandlerFunc {
 			},
 		}
 		for i, r := range resp {
-			label := r.Metric.Name
-			if label == "" {
-				label = fmt.Sprintf("line%d", i+1)
-			}
 			l := Line{
 				Color: colorScheme[i%len(colorScheme)],
 				Fill:  true,
-				Label: label,
+				Label: makeLabel(opts.Legend, r.Metric),
 			}
 			for _, v := range r.Values {
 				val, _ := strconv.Atoi(v[1].(string))
@@ -137,4 +134,14 @@ func readInt(w http.ResponseWriter, r *http.Request, field string, def int) (int
 		return 0, false
 	}
 	return n, true
+}
+
+func makeLabel(fixed string, m Metric) string {
+	if fixed != "" {
+		return fixed
+	}
+	if name := m.Name; name != "" {
+		return name
+	}
+	return m.Job
 }

@@ -220,7 +220,9 @@ func renderSVG(w io.Writer, g Graph) error {
       <text x="%d" y="%d" style="text-anchor: start; dominant-baseline: central">%s</text>
     </g>`,
 			legendX+10, legendY, line.Color,
-			legendX+24, legendY+6, line.Label)
+			legendX+24, legendY+6,
+			html.EscapeString(line.Label),
+		)
 		if err != nil {
 			return err
 		}
