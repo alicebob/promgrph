@@ -2,6 +2,7 @@ package promgrph
 
 import (
 	"fmt"
+	"html"
 	"io"
 )
 
@@ -38,7 +39,7 @@ func renderSVG(w io.Writer, g Graph) error {
 `,
 		g.Width, g.Height, g.Width, g.Height,
 		g.Width, g.Height,
-		g.Width/2, g.Title,
+		g.Width/2, html.EscapeString(g.Title),
 	)
 	if err != nil {
 		return err
@@ -100,12 +101,10 @@ func renderSVG(w io.Writer, g Graph) error {
 		}
 	}
 
-
-
 	// Draw lines
 	xRange := g.XAxis.End - g.XAxis.Start
 	yRange := g.YAxis.End - g.YAxis.Start
-	
+
 	// Stack line points if requested (cumulative Y values)
 	if g.Stacked {
 		for i := 1; i < len(g.Lines); i++ {
@@ -118,7 +117,7 @@ func renderSVG(w io.Writer, g Graph) error {
 			}
 		}
 	}
-	
+
 	for i, line := range g.Lines {
 		// Draw fill area if enabled
 		if line.Fill && len(line.Points) > 0 {
@@ -228,9 +227,9 @@ func renderSVG(w io.Writer, g Graph) error {
 		legendY += 20
 	}
 	_, err = fmt.Fprintf(w, "\n  </g>")
-		if err != nil {
-			return err
-		}
+	if err != nil {
+		return err
+	}
 
 	_, err = fmt.Fprint(w, `</svg>`)
 	return err

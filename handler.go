@@ -13,16 +13,21 @@ var colorScheme = []string{
 	"#EDC948", "#B07AA1", "#FF9DA7", "#9C755F", "#BAB0AC",
 }
 
+type GraphOpts struct {
+	Title   string
+	Stacked bool
+}
+
 // Returns the actual graphs.
 // Usage:
 //
-//	m.HandleFunc("GET /cpuload.png", c.MakeSVGHandler("node_cpu_seconds_total[5m]"))
+//	m.HandleFunc("GET /cpuload.png", c.MakeSVGHandler("node_cpu_seconds_total[5m]", GraphOpts{Title: "hello"}))
 //
-// options:
+// query param options:
 //   - width: in pixels
 //   - height: in pixels
 //   - stacked: "true"
-func (c *Client) MakeSVGHandler(expr string) http.HandlerFunc {
+func (c *Client) MakeSVGHandler(expr string, opts GraphOpts) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		now := time.Now().UTC()
@@ -59,7 +64,7 @@ func (c *Client) MakeSVGHandler(expr string) http.HandlerFunc {
 		g := Graph{
 			Width:   width,
 			Height:  height,
-			Title:   "My first query!",
+			Title:   opts.Title,
 			Stacked: stacked,
 			XAxis: Axis{
 				Start: int(q.Start.Unix()),

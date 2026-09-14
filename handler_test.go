@@ -14,7 +14,9 @@ func TestMakeSVGHandler(t *testing.T) {
 	c := NewClient(prom.URL)
 
 	m := http.NewServeMux()
-	m.Handle("GET /graph.svg", c.MakeSVGHandler("foobar"))
+	m.Handle("GET /graph.svg", c.MakeSVGHandler("foobar", GraphOpts{
+		Title: "<b>hello",
+	}))
 	s := httptest.NewTestServer(t, m)
 	ch := s.Client()
 

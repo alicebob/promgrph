@@ -52,6 +52,12 @@ type (
 )
 
 func (c *Client) runQuery(ctx context.Context, q promQuery) ([]QueryResult, error) {
+	if c == nil {
+		return nil, fmt.Errorf("nil promgrph client")
+	}
+	if c.Server == "" {
+		return nil, fmt.Errorf("unconfigured promgrph client")
+	}
 	args := &url.Values{}
 	args.Set("query", q.Expr)
 	args.Set("start", fmt.Sprintf("%d", q.Start.Unix()))
