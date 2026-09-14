@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/url"
+	"time"
 )
 
 func (c *Client) TemplateFuncMap() template.FuncMap {
@@ -15,6 +16,12 @@ func (c *Client) TemplateFuncMap() template.FuncMap {
 		"height": func(n int) Option {
 			return func(a *GraphArgs) { a.Height = n }
 		},
+		"period": func(n string) Option {
+			return func(a *GraphArgs) {
+				p, _ := time.ParseDuration(n) // FIXME: error
+				a.Period = p
+			}
+		},
 	}
 }
 
@@ -24,6 +31,7 @@ type (
 	GraphArgs struct {
 		Width  int
 		Height int
+		Period time.Duration
 	}
 )
 
@@ -46,6 +54,9 @@ func (c *Client) templGraph(path string, opts ...Option) template.HTML {
 		if args.Height > 0 {
 			attrs += fmt.Sprintf(` height="%d"`, args.Height)
 			u.Set("height", fmt.Sprintf("%d", args.Height))
+		}
+		if args.Period > 0 {
+			u.Set("period", fmt.Sprintf("%s", args.Period))
 		}
 	}
 	return template.HTML(fmt.Sprintf(`<img src="%s?%s"%s>`, path, u.Encode(), attrs))

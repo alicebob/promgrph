@@ -35,6 +35,7 @@ func indexHandler(c *promgrph.Client) func(http.ResponseWriter, *http.Request) {
 </head>
 <body>
 	{{graph "/graph.svg" (width 600)}}<br>
+	{{graph "/graph.svg" (width 600) (period "24h")}}<br>
 	{{graph "/alloc.svg" (width 800) (height 300) }}<br>
 	{{graph "/free.svg" (width 400) }}<br>
 </body>

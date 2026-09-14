@@ -27,7 +27,7 @@ type GraphOpts struct {
 // query param options:
 //   - width: in pixels
 //   - height: in pixels
-//   - stacked: "true"
+//   - period: how far back in time. in duration: "24h". Default 1h.
 func (c *Client) MakeSVGHandler(expr string, opts GraphOpts) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -40,11 +40,13 @@ func (c *Client) MakeSVGHandler(expr string, opts GraphOpts) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		stacked := r.FormValue("stacked") == "true"
-
+		delta, ok := readDuration(w, r, "period", time.Hour)
+		if !ok {
+			return
+		}
 		q := promQuery{
 			Expr:  expr,
-			Start: now.Add(-time.Hour),
+			Start: now.Add(-delta),
 			End:   now,
 		}
 		resp, err := c.runQuery(ctx, q)
@@ -55,10 +57,10 @@ func (c *Client) MakeSVGHandler(expr string, opts GraphOpts) http.HandlerFunc {
 		}
 
 		var xTicks []AxisTick
-		period := 10 * time.Minute
+		period, format := nicePeriod(delta)
 		for t := q.Start.Truncate(period); !t.After(q.End); t = t.Add(period) {
 			if !t.Before(q.Start) {
-				xTicks = append(xTicks, AxisTick{int(t.Unix()), t.Format("15:04")})
+				xTicks = append(xTicks, AxisTick{int(t.Unix()), t.Format(format)})
 			}
 		}
 
@@ -66,7 +68,7 @@ func (c *Client) MakeSVGHandler(expr string, opts GraphOpts) http.HandlerFunc {
 			Width:   width,
 			Height:  height,
 			Title:   opts.Title,
-			Stacked: stacked,
+			Stacked: opts.Stacked,
 			XAxis: Axis{
 				Start: int(q.Start.Unix()),
 				End:   int(q.End.Unix()),
@@ -136,6 +138,21 @@ func readInt(w http.ResponseWriter, r *http.Request, field string, def int) (int
 	return n, true
 }
 
+// see readInt()
+func readDuration(w http.ResponseWriter, r *http.Request, field string, def time.Duration) (time.Duration, bool) {
+	s := r.FormValue(field)
+	if s == "" {
+		return def, true
+	}
+	n, err := time.ParseDuration(s)
+	if err != nil {
+		w.WriteHeader(400)
+		fmt.Fprintf(w, "invalid value for argument %q", field)
+		return 0, false
+	}
+	return n, true
+}
+
 func makeLabel(fixed string, m Metric) string {
 	if fixed != "" {
 		return fixed
@@ -144,4 +161,22 @@ func makeLabel(fixed string, m Metric) string {
 		return name
 	}
 	return m.Job
+}
+
+func nicePeriod(d time.Duration) (time.Duration, string) {
+	// FIXME: revisit this, and do something with the width (which we know kinda)
+	switch {
+	case d <= time.Minute:
+		return 10 * time.Second, "15:04:05"
+	case d <= 10*time.Minute:
+		return time.Minute, "15:04"
+	case d <= time.Hour:
+		return 10 * time.Minute, "15:04"
+	case d <= 24*time.Hour:
+		return 3 * time.Hour, "15:04"
+	case d <= 7*24*time.Hour:
+		return 24 * time.Hour, "01-02T15:04"
+	default:
+		return 7 * 24 * time.Hour, "01-02T15:04"
+	}
 }
