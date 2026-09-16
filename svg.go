@@ -121,52 +121,52 @@ func renderSVG(w io.Writer, g Graph) error {
 	for i, line := range g.Lines {
 		// Draw fill area if enabled
 		if line.Fill && len(line.Points) > 0 {
-			firstX := leftPad + ((line.Points[0][0] - g.XAxis.Start) * graphWidth / xRange)
-			firstY := graphTop + graphHeight - ((line.Points[0][1] - g.YAxis.Start) * graphHeight / yRange)
-			_, err = fmt.Fprintf(w, "\n  <path d=\"M %d %d", firstX, firstY)
-			if err != nil {
-				return err
-			}
+			// Track fill path segments, splitting at gaps
+			prevFillX := -1
+			fillStartX := leftPad + ((line.Points[0][0] - g.XAxis.Start) * graphWidth / xRange)
+			fillStartY := graphTop + graphHeight - ((line.Points[0][1] - g.YAxis.Start) * graphHeight / yRange)
+			fillPath := fmt.Sprintf("M %d %d", fillStartX, fillStartY)
+			
 			for _, p := range line.Points[1:] {
 				x := leftPad + ((p[0] - g.XAxis.Start) * graphWidth / xRange)
 				y := graphTop + graphHeight - ((p[1] - g.YAxis.Start) * graphHeight / yRange)
-				_, err = fmt.Fprintf(w, " L %d %d", x, y)
-				if err != nil {
-					return err
+				if prevFillX >= 0 && x-prevFillX > 5 {
+					// Gap detected in fill - close current segment and start new one
+					fillPath += fmt.Sprintf(" L %d %d L %d %d Z", prevFillX, graphBottom, fillStartX, graphBottom)
+					fillStartX = x
+					fillStartY = y
+					fillPath += fmt.Sprintf(" M %d %d", fillStartX, fillStartY)
+				} else {
+					fillPath += fmt.Sprintf(" L %d %d", x, y)
 				}
+				prevFillX = x
 			}
+			// Close the fill path
 			lastX := leftPad + ((line.Points[len(line.Points)-1][0] - g.XAxis.Start) * graphWidth / xRange)
+			
 			// For stacked lines, fill down to previous line; for non-stacked or first line, fill to graph bottom
 			if g.Stacked && i > 0 {
 				prevLine := &g.Lines[i-1]
 				if len(prevLine.Points) > 0 {
-					prevFirstY := graphTop + graphHeight - ((prevLine.Points[0][1] - g.YAxis.Start) * graphHeight / yRange)
+					// For stacked fill with gaps, we need to close each segment properly
+					// This is complex - for now, just close last segment to prev line
 					prevLastY := graphTop + graphHeight - ((prevLine.Points[len(prevLine.Points)-1][1] - g.YAxis.Start) * graphHeight / yRange)
-					_, err = fmt.Fprintf(w, " L %d %d", lastX, prevLastY)
-					if err != nil {
-						return err
-					}
-					// Reverse through prev line points
+					fillPath += fmt.Sprintf(" L %d %d", lastX, prevLastY)
+					prevFirstY := graphTop + graphHeight - ((prevLine.Points[0][1] - g.YAxis.Start) * graphHeight / yRange)
 					for j := len(prevLine.Points) - 2; j >= 0; j-- {
 						px := leftPad + ((prevLine.Points[j][0] - g.XAxis.Start) * graphWidth / xRange)
 						py := graphTop + graphHeight - ((prevLine.Points[j][1] - g.YAxis.Start) * graphHeight / yRange)
-						_, err = fmt.Fprintf(w, " L %d %d", px, py)
-						if err != nil {
-							return err
-						}
+						fillPath += fmt.Sprintf(" L %d %d", px, py)
 					}
-					_, err = fmt.Fprintf(w, " L %d %d Z\" fill=\"%s\" fill-opacity=\"0.2\"/>\n", firstX, prevFirstY, line.Color)
-					if err != nil {
-						return err
-					}
+					fillPath += fmt.Sprintf(" L %d %d Z", fillStartX, prevFirstY)
 				}
 			} else {
 				// Non-stacked or first line: fill to graph bottom
-				_, err = fmt.Fprintf(w, " L %d %d L %d %d Z\" fill=\"%s\" fill-opacity=\"0.2\"/>\n",
-					lastX, graphBottom, firstX, graphBottom, line.Color)
-				if err != nil {
-					return err
-				}
+				fillPath += fmt.Sprintf(" L %d %d L %d %d Z", lastX, graphBottom, fillStartX, graphBottom)
+			}
+			_, err = fmt.Fprintf(w, "\n  <path d=\"%s\" fill=\"%s\" fill-opacity=\"0.2\"/>\n", fillPath, line.Color)
+			if err != nil {
+				return err
 			}
 		}
 
@@ -175,14 +175,21 @@ func renderSVG(w io.Writer, g Graph) error {
 		if err != nil {
 			return err
 		}
+		prevX := -1
 		for i, p := range line.Points {
 			x := leftPad + ((p[0] - g.XAxis.Start) * graphWidth / xRange)
 			y := graphTop + graphHeight - ((p[1] - g.YAxis.Start) * graphHeight / yRange)
 			if i == 0 {
 				_, err = fmt.Fprintf(w, "M %d %d", x, y)
 			} else {
-				_, err = fmt.Fprintf(w, " L %d %d", x, y)
+				// If gap > 5px, start new segment instead of connecting
+				if x-prevX > 5 {
+					_, err = fmt.Fprintf(w, " M %d %d", x, y)
+				} else {
+					_, err = fmt.Fprintf(w, " L %d %d", x, y)
+				}
 			}
+			prevX = x
 			if err != nil {
 				return err
 			}

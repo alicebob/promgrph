@@ -26,6 +26,7 @@ type (
 		Expr  string
 		Start time.Time
 		End   time.Time
+		Step  time.Duration
 	}
 
 	Metric struct {
@@ -63,7 +64,7 @@ func (c *Client) runQuery(ctx context.Context, q promQuery) ([]QueryResult, erro
 	args.Set("query", q.Expr)
 	args.Set("start", fmt.Sprintf("%d", q.Start.Unix()))
 	args.Set("end", fmt.Sprintf("%d", q.End.Unix()))
-	args.Set("step", "14") // random for now
+	args.Set("step", fmt.Sprintf("%ds", int(q.Step.Seconds())))
 	slog.InfoContext(ctx, "prom request", "path", "GET "+c.Server+"/api/v1/query_range?"+args.Encode())
 	req, err := http.NewRequestWithContext(ctx, "GET", c.Server+"/api/v1/query_range?"+args.Encode(), nil)
 	if err != nil {

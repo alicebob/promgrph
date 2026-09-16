@@ -27,7 +27,7 @@ type GraphOpts struct {
 // query param options:
 //   - width: in pixels
 //   - height: in pixels
-//   - period: how far back in time. in duration: "24h". Default 1h.
+//   - period: how far back in time. in duration: "24h". Default 10m.
 func (c *Client) MakeSVGHandler(expr string, opts GraphOpts) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -40,14 +40,26 @@ func (c *Client) MakeSVGHandler(expr string, opts GraphOpts) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		delta, ok := readDuration(w, r, "period", time.Hour)
+		delta, ok := readDuration(w, r, "period", 10*time.Minute)
 		if !ok {
 			return
+		}
+		// Calculate step: aim for ~1 data point per pixel of graph width
+		// Graph width = width - leftPad(60) - legendGap(10) - legendWidth(119) - rightPad(25)
+		graphWidth := width - 60 - 10 - 119 - 25
+		if graphWidth <= 0 {
+			graphWidth = 400
+		}
+		step := delta / time.Duration(graphWidth)
+		// Ensure minimum step of 1 second
+		if step < time.Second {
+			step = time.Second
 		}
 		q := promQuery{
 			Expr:  expr,
 			Start: now.Add(-delta),
 			End:   now,
+			Step:  step,
 		}
 		resp, err := c.runQuery(ctx, q)
 		if err != nil {
