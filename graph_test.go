@@ -30,6 +30,49 @@ func TestFormatValue(t *testing.T) {
 	}
 }
 
+func TestSplitSection(t *testing.T) {
+	mk := func(x, y int) [2]int { return [2]int{x, y} }
+
+	tests := []struct {
+		name    string
+		section Section
+		maxGap  int
+		want    []Section
+	}{
+		{
+			name:    "no gap",
+			section: Section{mk(1, 1), mk(2, 2), mk(3, 3)},
+			maxGap:  1,
+			want:    []Section{{mk(1, 1), mk(2, 2), mk(3, 3)}},
+		},
+		{
+			name:    "one gap",
+			section: Section{mk(1, 1), mk(2, 2), mk(5, 5), mk(6, 6)},
+			maxGap:  1,
+			want:    []Section{{mk(1, 1), mk(2, 2)}, {mk(5, 5), mk(6, 6)}},
+		},
+		{
+			name:    "empty",
+			section: Section{},
+			maxGap:  1,
+			want:    nil,
+		},
+		{
+			name:    "single point",
+			section: Section{mk(1, 1)},
+			maxGap:  1,
+			want:    []Section{{mk(1, 1)}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := splitSection(tt.section, tt.maxGap)
+			must.Eq(t, tt.want, got)
+		})
+	}
+}
+
 func TestNiceTicks(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -87,6 +130,8 @@ func TestNiceTicks(t *testing.T) {
 }
 
 func TestComputeYBounds(t *testing.T) {
+	pt := func(x, y int) [2]int { return [2]int{x, y} }
+
 	tests := []struct {
 		name    string
 		lines   []Line
@@ -101,31 +146,31 @@ func TestComputeYBounds(t *testing.T) {
 		},
 		{
 			name:    "single point",
-			lines:   []Line{{Points: [][2]int{{0, 5}}}},
+			lines:   []Line{{Sections: []Section{{pt(0, 5)}}}},
 			wantMin: 4,
 			wantMax: 6,
 		},
 		{
 			name:    "all same values",
-			lines:   []Line{{Points: [][2]int{{0, 3}, {1, 3}, {2, 3}}}},
+			lines:   []Line{{Sections: []Section{{pt(0, 3), pt(1, 3), pt(2, 3)}}}},
 			wantMin: 2,
 			wantMax: 4,
 		},
 		{
 			name:    "mixed values",
-			lines:   []Line{{Points: [][2]int{{0, 10}, {1, 0}, {2, 5}}}},
+			lines:   []Line{{Sections: []Section{{pt(0, 10), pt(1, 0), pt(2, 5)}}}},
 			wantMin: 0,
 			wantMax: 10,
 		},
 		{
 			name:    "negative values",
-			lines:   []Line{{Points: [][2]int{{0, -5}, {1, -10}, {2, 0}}}},
+			lines:   []Line{{Sections: []Section{{pt(0, -5), pt(1, -10), pt(2, 0)}}}},
 			wantMin: -10,
 			wantMax: 0,
 		},
 		{
 			name:    "multiple lines",
-			lines:   []Line{{Points: [][2]int{{0, 1}, {1, 2}}}, {Points: [][2]int{{0, 3}, {1, 4}}}},
+			lines:   []Line{{Sections: []Section{{pt(0, 1), pt(1, 2)}}}, {Sections: []Section{{pt(0, 3), pt(1, 4)}}}},
 			wantMin: 1,
 			wantMax: 4,
 		},

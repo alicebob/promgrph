@@ -110,9 +110,14 @@ func renderSVG(w io.Writer, g Graph) error {
 		for i := 1; i < len(g.Lines); i++ {
 			prev := &g.Lines[i-1]
 			curr := &g.Lines[i]
-			if len(prev.Points) == len(curr.Points) {
-				for j := range curr.Points {
-					curr.Points[j][1] += prev.Points[j][1]
+			// Stack matching sections
+			for s := 0; s < len(curr.Sections) && s < len(prev.Sections); s++ {
+				currSec := curr.Sections[s]
+				prevSec := prev.Sections[s]
+				if len(currSec) == len(prevSec) {
+					for j := range currSec {
+						currSec[j][1] += prevSec[j][1]
+					}
 				}
 			}
 		}
@@ -120,52 +125,65 @@ func renderSVG(w io.Writer, g Graph) error {
 
 	for i, line := range g.Lines {
 		// Draw fill area if enabled
-		if line.Fill && len(line.Points) > 0 {
-			firstX := leftPad + ((line.Points[0][0] - g.XAxis.Start) * graphWidth / xRange)
-			firstY := graphTop + graphHeight - ((line.Points[0][1] - g.YAxis.Start) * graphHeight / yRange)
-			_, err = fmt.Fprintf(w, "\n  <path d=\"M %d %d", firstX, firstY)
-			if err != nil {
-				return err
-			}
-			for _, p := range line.Points[1:] {
-				x := leftPad + ((p[0] - g.XAxis.Start) * graphWidth / xRange)
-				y := graphTop + graphHeight - ((p[1] - g.YAxis.Start) * graphHeight / yRange)
-				_, err = fmt.Fprintf(w, " L %d %d", x, y)
+		if line.Fill {
+			for secIdx, section := range line.Sections {
+				if len(section) == 0 {
+					continue
+				}
+				firstX := leftPad + ((section[0][0] - g.XAxis.Start) * graphWidth / xRange)
+				firstY := graphTop + graphHeight - ((section[0][1] - g.YAxis.Start) * graphHeight / yRange)
+				_, err = fmt.Fprintf(w, "\n  <path d=\"M %d %d", firstX, firstY)
 				if err != nil {
 					return err
 				}
-			}
-			lastX := leftPad + ((line.Points[len(line.Points)-1][0] - g.XAxis.Start) * graphWidth / xRange)
-			// For stacked lines, fill down to previous line; for non-stacked or first line, fill to graph bottom
-			if g.Stacked && i > 0 {
-				prevLine := &g.Lines[i-1]
-				if len(prevLine.Points) > 0 {
-					prevFirstY := graphTop + graphHeight - ((prevLine.Points[0][1] - g.YAxis.Start) * graphHeight / yRange)
-					prevLastY := graphTop + graphHeight - ((prevLine.Points[len(prevLine.Points)-1][1] - g.YAxis.Start) * graphHeight / yRange)
-					_, err = fmt.Fprintf(w, " L %d %d", lastX, prevLastY)
+				for _, p := range section[1:] {
+					x := leftPad + ((p[0] - g.XAxis.Start) * graphWidth / xRange)
+					y := graphTop + graphHeight - ((p[1] - g.YAxis.Start) * graphHeight / yRange)
+					_, err = fmt.Fprintf(w, " L %d %d", x, y)
 					if err != nil {
 						return err
 					}
-					// Reverse through prev line points
-					for j := len(prevLine.Points) - 2; j >= 0; j-- {
-						px := leftPad + ((prevLine.Points[j][0] - g.XAxis.Start) * graphWidth / xRange)
-						py := graphTop + graphHeight - ((prevLine.Points[j][1] - g.YAxis.Start) * graphHeight / yRange)
-						_, err = fmt.Fprintf(w, " L %d %d", px, py)
+				}
+				lastX := leftPad + ((section[len(section)-1][0] - g.XAxis.Start) * graphWidth / xRange)
+				// For stacked lines, fill down to previous line's matching section
+				if g.Stacked && i > 0 {
+					prevLine := &g.Lines[i-1]
+					if secIdx < len(prevLine.Sections) && len(prevLine.Sections[secIdx]) > 0 {
+						prevSec := prevLine.Sections[secIdx]
+						prevFirstY := graphTop + graphHeight - ((prevSec[0][1] - g.YAxis.Start) * graphHeight / yRange)
+						prevLastY := graphTop + graphHeight - ((prevSec[len(prevSec)-1][1] - g.YAxis.Start) * graphHeight / yRange)
+						_, err = fmt.Fprintf(w, " L %d %d", lastX, prevLastY)
+						if err != nil {
+							return err
+						}
+						// Reverse through prev section points
+						for j := len(prevSec) - 2; j >= 0; j-- {
+							px := leftPad + ((prevSec[j][0] - g.XAxis.Start) * graphWidth / xRange)
+							py := graphTop + graphHeight - ((prevSec[j][1] - g.YAxis.Start) * graphHeight / yRange)
+							_, err = fmt.Fprintf(w, " L %d %d", px, py)
+							if err != nil {
+								return err
+							}
+						}
+						_, err = fmt.Fprintf(w, " L %d %d Z\" fill=\"%s\" fill-opacity=\"0.2\"/>\n", firstX, prevFirstY, line.Color)
+						if err != nil {
+							return err
+						}
+					} else {
+						// Fallback: fill to graph bottom
+						_, err = fmt.Fprintf(w, " L %d %d L %d %d Z\" fill=\"%s\" fill-opacity=\"0.2\"/>\n",
+							lastX, graphBottom, firstX, graphBottom, line.Color)
 						if err != nil {
 							return err
 						}
 					}
-					_, err = fmt.Fprintf(w, " L %d %d Z\" fill=\"%s\" fill-opacity=\"0.2\"/>\n", firstX, prevFirstY, line.Color)
+				} else {
+					// Non-stacked or first line: fill to graph bottom
+					_, err = fmt.Fprintf(w, " L %d %d L %d %d Z\" fill=\"%s\" fill-opacity=\"0.2\"/>\n",
+						lastX, graphBottom, firstX, graphBottom, line.Color)
 					if err != nil {
 						return err
 					}
-				}
-			} else {
-				// Non-stacked or first line: fill to graph bottom
-				_, err = fmt.Fprintf(w, " L %d %d L %d %d Z\" fill=\"%s\" fill-opacity=\"0.2\"/>\n",
-					lastX, graphBottom, firstX, graphBottom, line.Color)
-				if err != nil {
-					return err
 				}
 			}
 		}
@@ -175,16 +193,20 @@ func renderSVG(w io.Writer, g Graph) error {
 		if err != nil {
 			return err
 		}
-		for i, p := range line.Points {
-			x := leftPad + ((p[0] - g.XAxis.Start) * graphWidth / xRange)
-			y := graphTop + graphHeight - ((p[1] - g.YAxis.Start) * graphHeight / yRange)
-			if i == 0 {
-				_, err = fmt.Fprintf(w, "M %d %d", x, y)
-			} else {
-				_, err = fmt.Fprintf(w, " L %d %d", x, y)
-			}
-			if err != nil {
-				return err
+		firstInLine := true
+		for _, section := range line.Sections {
+			for i, p := range section {
+				x := leftPad + ((p[0] - g.XAxis.Start) * graphWidth / xRange)
+				y := graphTop + graphHeight - ((p[1] - g.YAxis.Start) * graphHeight / yRange)
+				if firstInLine || i == 0 {
+					_, err = fmt.Fprintf(w, "M %d %d", x, y)
+					firstInLine = false
+				} else {
+					_, err = fmt.Fprintf(w, " L %d %d", x, y)
+				}
+				if err != nil {
+					return err
+				}
 			}
 		}
 		_, err = fmt.Fprint(w, "\"/>\n")

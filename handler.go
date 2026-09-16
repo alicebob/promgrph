@@ -1,10 +1,14 @@
 package promgrph
 
 import (
+	"bytes"
+	"context"
 	"fmt"
+	"html/template"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -27,7 +31,7 @@ type GraphOpts struct {
 // query param options:
 //   - width: in pixels
 //   - height: in pixels
-//   - period: how far back in time. in duration: "24h". Default 1h.
+//   - period: how far back in time. in duration: "24h". Default 10m.
 func (c *Client) MakeSVGHandler(expr string, opts GraphOpts) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -40,87 +44,55 @@ func (c *Client) MakeSVGHandler(expr string, opts GraphOpts) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		delta, ok := readDuration(w, r, "period", time.Hour)
+		delta, ok := readDuration(w, r, "period", 10*time.Minute)
 		if !ok {
 			return
+		}
+		// Calculate step: aim for ~1 data point per pixel of graph width
+		// Graph width = width - leftPad(60) - legendGap(10) - legendWidth(119) - rightPad(25)
+		graphWidth := width - 60 - 10 - 119 - 25
+		if graphWidth <= 0 {
+			graphWidth = 400
+		}
+		step := delta / time.Duration(graphWidth)
+		// Ensure minimum step of 1 second
+		if step < time.Second {
+			step = time.Second
 		}
 		q := promQuery{
 			Expr:  expr,
 			Start: now.Add(-delta),
 			End:   now,
+			Step:  step,
 		}
-		resp, err := c.runQuery(ctx, q)
+		g, err := makeGraph(ctx, c, q, opts, width, height)
 		if err != nil {
 			slog.ErrorContext(ctx, "query failed", "error", err)
-			w.WriteHeader(500)
-			w.Write([]byte("failed"))
+			w.Header().Set("Content-Type", "image/svg+xml")
+			// w.WriteHeader(500)
+			w.Write(errorSVG(width, height))
+			return
 		}
 
-		var xTicks []AxisTick
-		period, format := nicePeriod(delta)
-		for t := q.Start.Truncate(period); !t.After(q.End); t = t.Add(period) {
-			if !t.Before(q.Start) {
-				xTicks = append(xTicks, AxisTick{int(t.Unix()), t.Format(format)})
-			}
+		var buf bytes.Buffer
+		if err := renderSVG(&buf, g); err != nil {
+			slog.ErrorContext(ctx, "svg rendering failed", "error", err)
+			w.Header().Set("Content-Type", "image/svg+xml")
+			// w.WriteHeader(500)
+			w.Write(errorSVG(width, height))
+			return
 		}
-
-		g := Graph{
-			Width:   width,
-			Height:  height,
-			Title:   opts.Title,
-			Stacked: opts.Stacked,
-			XAxis: Axis{
-				Start: int(q.Start.Unix()),
-				End:   int(q.End.Unix()),
-				Label: "Time!",
-				Ticks: xTicks,
-			},
-		}
-		for i, r := range resp {
-			l := Line{
-				Color: colorScheme[i%len(colorScheme)],
-				Fill:  true,
-				Label: makeLabel(opts.Legend, r.Metric),
-			}
-			for _, v := range r.Values {
-				val, _ := strconv.Atoi(v[1].(string))
-				x := interp(
-					v[0].(float64),
-					float64(q.Start.Unix()),
-					float64(q.End.Unix()),
-					g.XAxis.Start,
-					g.XAxis.End,
-				)
-				y := val
-				l.Points = append(l.Points, [2]int{x, y})
-			}
-			g.Lines = append(g.Lines, l)
-		}
-
-		yMin, yMax := computeYBounds(g.Lines)
-		ticks := niceTicks(yMin, yMax, 5)
-
-		// Adjust YAxis range to cover all ticks (niceTicks may extend beyond data)
-		if len(ticks) > 0 {
-			if ticks[0].V < yMin {
-				yMin = ticks[0].V
-			}
-			if ticks[len(ticks)-1].V > yMax {
-				yMax = ticks[len(ticks)-1].V
-			}
-		}
-
-		g.YAxis = Axis{
-			Start: yMin,
-			End:   yMax,
-			Label: "Numbers!",
-			Ticks: ticks,
-		}
-
 		w.Header().Set("Content-Type", "image/svg+xml")
-		renderSVG(w, g)
-		// w.Write([]byte(fmt.Sprintf("very much todo: %#v", resp)))
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", buf.Len()))
+		w.Write(buf.Bytes())
 	}
+}
+
+func errorSVG(width, height int) []byte {
+	msg := fmt.Sprintf("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" viewBox=\"0 0 %d %d\">"+
+		"<text x=\"%d\" y=\"%d\" text-anchor=\"middle\" dominant-baseline=\"middle\">Graph unavailable right now</text>"+
+		"</svg>", width, height, width, height, width/2, height/2)
+	return []byte(msg)
 }
 
 // returns the value and ok.
@@ -153,14 +125,94 @@ func readDuration(w http.ResponseWriter, r *http.Request, field string, def time
 	return n, true
 }
 
+func makeGraph(ctx context.Context, c *Client, q promQuery, opts GraphOpts, width, height int) (Graph, error) {
+	resp, err := c.runQuery(ctx, q)
+	if err != nil {
+		return Graph{}, err
+	}
+
+	var xTicks []AxisTick
+	period, format := nicePeriod(q.End.Sub(q.Start))
+	for t := q.Start.Truncate(period); !t.After(q.End); t = t.Add(period) {
+		if !t.Before(q.Start) {
+			xTicks = append(xTicks, AxisTick{int(t.Unix()), t.Format(format)})
+		}
+	}
+
+	g := Graph{
+		Width:   width,
+		Height:  height,
+		Title:   opts.Title,
+		Stacked: opts.Stacked,
+		XAxis: Axis{
+			Start: int(q.Start.Unix()),
+			End:   int(q.End.Unix()),
+			Label: "Time!",
+			Ticks: xTicks,
+		},
+	}
+	for i, r := range resp {
+		l := Line{
+			Color: colorScheme[i%len(colorScheme)],
+			Fill:  true,
+			Label: makeLabel(opts.Legend, r.Metric),
+		}
+		var s Section
+		for _, v := range r.Values {
+			val, _ := strconv.Atoi(v[1].(string))
+			x := interp(
+				v[0].(float64),
+				float64(q.Start.Unix()),
+				float64(q.End.Unix()),
+				g.XAxis.Start,
+				g.XAxis.End,
+			)
+			s = append(s, [2]int{x, val})
+		}
+		// anything under a minute makes no sense in Prometeus-world
+		l.Sections = splitSection(s, max(60, int(q.Step.Seconds())))
+		g.Lines = append(g.Lines, l)
+	}
+
+	yMin, yMax := computeYBounds(g.Lines)
+	ticks := niceTicks(yMin, yMax, 5)
+
+	// Adjust YAxis range to cover all ticks (niceTicks may extend beyond data)
+	if len(ticks) > 0 {
+		if ticks[0].V < yMin {
+			yMin = ticks[0].V
+		}
+		if ticks[len(ticks)-1].V > yMax {
+			yMax = ticks[len(ticks)-1].V
+		}
+	}
+
+	g.YAxis = Axis{
+		Start: yMin,
+		End:   yMax,
+		Label: "Numbers!",
+		Ticks: ticks,
+	}
+
+	return g, nil
+}
+
 func makeLabel(fixed string, m Metric) string {
 	if fixed != "" {
-		return fixed
+		t, err := template.New("label").Parse(fixed)
+		if err != nil {
+			return "[broken template]"
+		}
+		buf := &strings.Builder{}
+		if err := t.Execute(buf, m); err != nil {
+			return fmt.Sprintf("broken template: %s", err)
+		}
+		return buf.String()
 	}
-	if name := m.Name; name != "" {
+	if name := m["__name__"]; name != "" {
 		return name
 	}
-	return m.Job
+	return m["job"]
 }
 
 func nicePeriod(d time.Duration) (time.Duration, string) {
