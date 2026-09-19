@@ -115,7 +115,24 @@ func renderSVG(w io.Writer, g Graph) error {
 			continue
 		}
 
-		// Draw the path, connecting measurements unless there's a gap
+		// Draw area shading first (bottom layer): 1-pixel-wide column from point down to X axis
+		// Only draw when x increases to avoid overlapping measurements
+		lastShadedX := -1
+		for _, p := range line.Points {
+			x := leftPad + ((p[0] - g.XAxis.Start) * graphWidth / xRange)
+			y := graphTop + graphHeight - ((p[1] - g.YAxis.Start) * graphHeight / yRange)
+			if x > lastShadedX {
+				lastShadedX = x
+				_, err = fmt.Fprintf(w, `  <rect x="%d" y="%d" width="1" height="%d" fill="%s" fill-opacity="0.2"/>
+`,
+					x, y, graphBottom-y, line.Color)
+				if err != nil {
+					return err
+				}
+			}
+		}
+		
+		// Draw the path on top of shading, connecting measurements unless there's a gap
 		_, err = fmt.Fprintf(w, "  <path class=\"line\" stroke=\"%s\" stroke-width=\"1\" fill=\"none\" d=\"", line.Color)
 		if err != nil {
 			return err
@@ -143,23 +160,6 @@ func renderSVG(w io.Writer, g Graph) error {
 		_, err = fmt.Fprintf(w, "\"/>\n")
 		if err != nil {
 			return err
-		}
-		
-		// Draw area shading: 1-pixel-wide column from point down to X axis
-		// Only draw when x increases to avoid overlapping measurements
-		lastShadedX := -1
-		for _, p := range line.Points {
-			x := leftPad + ((p[0] - g.XAxis.Start) * graphWidth / xRange)
-			y := graphTop + graphHeight - ((p[1] - g.YAxis.Start) * graphHeight / yRange)
-			if x > lastShadedX {
-				lastShadedX = x
-				_, err = fmt.Fprintf(w, `  <rect x="%d" y="%d" width="1" height="%d" fill="%s" fill-opacity="0.2"/>
-`,
-					x, y, graphBottom-y, line.Color)
-				if err != nil {
-					return err
-				}
-			}
 		}
 		
 		// Also draw 1x1 pixels at each point
