@@ -33,6 +33,7 @@ func renderSVG(w io.Writer, g Graph) error {
     .tick text { font-family: sans-serif; font-size: 12px; text-anchor: middle; }
     .legend { font-family: sans-serif; font-size: 12px; }
     .legend-color { width: 12px; height: 12px; }
+    .line { stroke-width: 1px; }
   </style>
   <rect class="background" x="0" y="0" width="%d" height="%d"/>
   <text class="title" x="%d" y="20">%s</text>
@@ -105,113 +106,70 @@ func renderSVG(w io.Writer, g Graph) error {
 	xRange := g.XAxis.End - g.XAxis.Start
 	yRange := g.YAxis.End - g.YAxis.Start
 
-	// Stack line points if requested (cumulative Y values)
-	if g.Stacked {
-		for i := 1; i < len(g.Lines); i++ {
-			prev := &g.Lines[i-1]
-			curr := &g.Lines[i]
-			// Stack matching sections
-			for s := 0; s < len(curr.Sections) && s < len(prev.Sections); s++ {
-				currSec := curr.Sections[s]
-				prevSec := prev.Sections[s]
-				if len(currSec) == len(prevSec) {
-					for j := range currSec {
-						currSec[j][1] += prevSec[j][1]
-					}
-				}
-			}
-		}
-	}
+	// Note: Stacked lines are pre-calculated in graph.go via stackLines()
+	// SVG draws lines between measurements, breaking only when measurements are missing
 
-	for i, line := range g.Lines {
-		// Draw fill area if enabled
-		if line.Fill {
-			for secIdx, section := range line.Sections {
-				if len(section) == 0 {
-					continue
-				}
-				firstX := leftPad + ((section[0][0] - g.XAxis.Start) * graphWidth / xRange)
-				firstY := graphTop + graphHeight - ((section[0][1] - g.YAxis.Start) * graphHeight / yRange)
-				_, err = fmt.Fprintf(w, "\n  <path d=\"M %d %d", firstX, firstY)
-				if err != nil {
-					return err
-				}
-				for _, p := range section[1:] {
-					x := leftPad + ((p[0] - g.XAxis.Start) * graphWidth / xRange)
-					y := graphTop + graphHeight - ((p[1] - g.YAxis.Start) * graphHeight / yRange)
-					_, err = fmt.Fprintf(w, " L %d %d", x, y)
-					if err != nil {
-						return err
-					}
-				}
-				lastX := leftPad + ((section[len(section)-1][0] - g.XAxis.Start) * graphWidth / xRange)
-				// For stacked lines, fill down to previous line's matching section
-				if g.Stacked && i > 0 {
-					prevLine := &g.Lines[i-1]
-					if secIdx < len(prevLine.Sections) && len(prevLine.Sections[secIdx]) > 0 {
-						prevSec := prevLine.Sections[secIdx]
-						prevFirstY := graphTop + graphHeight - ((prevSec[0][1] - g.YAxis.Start) * graphHeight / yRange)
-						prevLastY := graphTop + graphHeight - ((prevSec[len(prevSec)-1][1] - g.YAxis.Start) * graphHeight / yRange)
-						_, err = fmt.Fprintf(w, " L %d %d", lastX, prevLastY)
-						if err != nil {
-							return err
-						}
-						// Reverse through prev section points
-						for j := len(prevSec) - 2; j >= 0; j-- {
-							px := leftPad + ((prevSec[j][0] - g.XAxis.Start) * graphWidth / xRange)
-							py := graphTop + graphHeight - ((prevSec[j][1] - g.YAxis.Start) * graphHeight / yRange)
-							_, err = fmt.Fprintf(w, " L %d %d", px, py)
-							if err != nil {
-								return err
-							}
-						}
-						_, err = fmt.Fprintf(w, " L %d %d Z\" fill=\"%s\" fill-opacity=\"0.2\"/>\n", firstX, prevFirstY, line.Color)
-						if err != nil {
-							return err
-						}
-					} else {
-						// Fallback: fill to graph bottom
-						_, err = fmt.Fprintf(w, " L %d %d L %d %d Z\" fill=\"%s\" fill-opacity=\"0.2\"/>\n",
-							lastX, graphBottom, firstX, graphBottom, line.Color)
-						if err != nil {
-							return err
-						}
-					}
-				} else {
-					// Non-stacked or first line: fill to graph bottom
-					_, err = fmt.Fprintf(w, " L %d %d L %d %d Z\" fill=\"%s\" fill-opacity=\"0.2\"/>\n",
-						lastX, graphBottom, firstX, graphBottom, line.Color)
-					if err != nil {
-						return err
-					}
-				}
-			}
+	for _, line := range g.Lines {
+		// Skip empty lines
+		if len(line.Points) == 0 {
+			continue
 		}
 
-		// Draw line
-		_, err = fmt.Fprintf(w, "  <path class=\"line\" stroke=\"%s\" stroke-width=\"2\" fill=\"none\" d=\"", line.Color)
+		// Draw the path, connecting measurements unless there's a gap
+		_, err = fmt.Fprintf(w, "  <path class=\"line\" stroke=\"%s\" stroke-width=\"1\" fill=\"none\" d=\"", line.Color)
 		if err != nil {
 			return err
 		}
-		firstInLine := true
-		for _, section := range line.Sections {
-			for i, p := range section {
-				x := leftPad + ((p[0] - g.XAxis.Start) * graphWidth / xRange)
-				y := graphTop + graphHeight - ((p[1] - g.YAxis.Start) * graphHeight / yRange)
-				if firstInLine || i == 0 {
-					_, err = fmt.Fprintf(w, "M %d %d", x, y)
-					firstInLine = false
+		first := true
+		for i, p := range line.Points {
+			x := leftPad + ((p[0] - g.XAxis.Start) * graphWidth / xRange)
+			y := graphTop + graphHeight - ((p[1] - g.YAxis.Start) * graphHeight / yRange)
+			
+			if first {
+				_, err = fmt.Fprintf(w, "M %d %d", x, y)
+				first = false
+			} else {
+				// If x-axis values are not consecutive, there's a missing measurement -> break line
+				if p[0] - line.Points[i-1][0] > 1 {
+					_, err = fmt.Fprintf(w, " M %d %d", x, y)
 				} else {
 					_, err = fmt.Fprintf(w, " L %d %d", x, y)
 				}
+			}
+			if err != nil {
+				return err
+			}
+		}
+		_, err = fmt.Fprintf(w, "\"/>\n")
+		if err != nil {
+			return err
+		}
+		
+		// Draw area shading: 1-pixel-wide column from point down to X axis
+		// Only draw when x increases to avoid overlapping measurements
+		lastShadedX := -1
+		for _, p := range line.Points {
+			x := leftPad + ((p[0] - g.XAxis.Start) * graphWidth / xRange)
+			y := graphTop + graphHeight - ((p[1] - g.YAxis.Start) * graphHeight / yRange)
+			if x > lastShadedX {
+				lastShadedX = x
+				_, err = fmt.Fprintf(w, `  <rect x="%d" y="%d" width="1" height="%d" fill="%s" fill-opacity="0.2"/>
+`,
+					x, y, graphBottom-y, line.Color)
 				if err != nil {
 					return err
 				}
 			}
 		}
-		_, err = fmt.Fprint(w, "\"/>\n")
-		if err != nil {
-			return err
+		
+		// Also draw 1x1 pixels at each point
+		for _, p := range line.Points {
+			x := leftPad + ((p[0] - g.XAxis.Start) * graphWidth / xRange)
+			y := graphTop + graphHeight - ((p[1] - g.YAxis.Start) * graphHeight / yRange)
+			_, err = fmt.Fprintf(w, "  <rect x=\"%d\" y=\"%d\" width=\"1\" height=\"1\" fill=\"%s\"/>\n", x, y, line.Color)
+			if err != nil {
+				return err
+			}
 		}
 	}
 

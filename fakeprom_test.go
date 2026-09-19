@@ -76,8 +76,13 @@ func NewFakePromWithGaps(t *testing.T) *FakeProm {
 		ts3 := toFloat(start, 302)
 		ts4 := toFloat(start, 313)
 		ts5 := toFloat(start, 334)
-		w.Write([]byte(fmt.Sprintf(`{"status":"success","data":{"resultType":"matrix","result":[{"metric":{"__name__":"up","job":"test","instance":"localhost:9090"},"values":[[%.0f,"1"],[%.0f,"2"],[%.0f,"3"],[%.0f,"4"],[%.0f,"5"],[%.0f,"6"]]}]}}`,
-			ts0, ts1, ts2, ts3, ts4, ts5)))
+		w.Write([]byte(fmt.Sprintf(`{"status":"success","data":{"resultType":"matrix","result":[
+{"metric":{"__name__":"up","job":"test","instance":"localhost:9090"},"values":[[%.0f,"1"],[%.0f,"2"],[%.0f,"3"],[%.0f,"4"],[%.0f,"5"],[%.0f,"6"]]},
+{"metric":{"__name__":"up","job":"test","instance":"localhost:9091"},"values":[[%.0f,"1"],[%.0f,"2"]]}
+]}}`,
+			ts0, ts1, ts2, ts3, ts4, ts5,
+			ts0, ts1,
+		)))
 	})
 	s := httptest.NewServer(m)
 	t.Cleanup(func() { s.Close() })

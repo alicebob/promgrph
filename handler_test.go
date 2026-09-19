@@ -36,8 +36,8 @@ func TestMakeSVGHandler(t *testing.T) {
 		m := http.NewServeMux()
 		m.Handle("GET /gap.svg", c.MakeSVGHandler("foobar", GraphOpts{
 			Title:   "gaps",
-			Legend:  "test",
-			Stacked: false,
+			Legend:  "{{.instance}}",
+			Stacked: true,
 		}))
 		s := httptest.NewTestServer(t, m)
 		defer s.Close()
@@ -47,12 +47,10 @@ func TestMakeSVGHandler(t *testing.T) {
 		must.NoError(t, err)
 		body, _ := io.ReadAll(resp.Body)
 		svg := string(body)
-		// With a gap in the data, we should see multiple "M" commands (at start and at gap)
-		// and also "L" commands (connecting points that are close together)
-		moveCount := strings.Count(svg, "M ")
-		lineCount := strings.Count(svg, " L ")
-		must.GreaterEq(t, 2, moveCount)
-		must.GreaterEq(t, 2, lineCount)
+		// With the new pixel-based approach, we use individual rect elements
+		// Check that we have rect elements for the data points
+		rectCount := strings.Count(svg, `<rect x=`)
+		must.GreaterEq(t, 2, rectCount)
 
 		must.NoError(t, os.WriteFile("/tmp/graph.svg", []byte(svg), 0600))
 	})

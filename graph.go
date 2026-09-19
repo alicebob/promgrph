@@ -26,10 +26,10 @@ type (
 		Label string
 	}
 	Line struct {
-		Color    string
-		Fill     bool // fill in the area under the line?
-		Label    string
-		Sections []Section // shouldn't overlap, is the idea
+		Color  string
+		Fill   bool // fill in the area under the line?
+		Label  string
+		Points Section
 	}
 	Section [][2]int
 )
@@ -135,22 +135,20 @@ func interp(v, inMin, inMax float64, outMin, outMax int) int {
 	return outMin + int((v-inMin)*float64(outMax-outMin)/(inMax-inMin))
 }
 
-// splitSection splits a section into multiple sections at x-gaps > maxGap (in seconds)
-func splitSection(section Section, maxGap int) []Section {
-	if len(section) == 0 {
-		return nil
-	}
-	var sections []Section
-	var current Section
-	for i, p := range section {
-		if i > 0 && p[0]-section[i-1][0] > maxGap {
-			sections = append(sections, current)
-			current = Section{p}
-		} else {
-			current = append(current, p)
+// stackLines pre-calculates stacked line values.
+// It modifies the lines in place, adding each line's Y values to the previous lines.
+// All lines must have the same number of points at the same X positions.
+func stackLines(lines []Line) {
+	for i := 1; i < len(lines); i++ {
+		prev := &lines[i-1]
+		curr := &lines[i]
+		// Stack current line on top of previous line
+		for j := range curr.Points {
+			if j < len(prev.Points) {
+				curr.Points[j][1] += prev.Points[j][1]
+			}
 		}
 	}
-	return append(sections, current)
 }
 
 // computeYBounds returns the minimum and maximum Y values from the lines.
@@ -159,15 +157,13 @@ func splitSection(section Section, maxGap int) []Section {
 func computeYBounds(lines []Line) (yMin, yMax int) {
 	found := false
 	for _, l := range lines {
-		for _, ps := range l.Sections {
-			for _, p := range ps {
-				if !found {
-					yMin, yMax = p[1], p[1]
-					found = true
-				} else {
-					yMin = min(yMin, p[1])
-					yMax = max(yMax, p[1])
-				}
+		for _, p := range l.Points {
+			if !found {
+				yMin, yMax = p[1], p[1]
+				found = true
+			} else {
+				yMin = min(yMin, p[1])
+				yMax = max(yMax, p[1])
 			}
 		}
 	}

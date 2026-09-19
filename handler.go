@@ -169,9 +169,13 @@ func makeGraph(ctx context.Context, c *Client, q promQuery, opts GraphOpts, widt
 			)
 			s = append(s, [2]int{x, val})
 		}
-		// anything under a minute makes no sense in Prometeus-world
-		l.Sections = splitSection(s, max(60, int(q.Step.Seconds())))
+		l.Points = s
 		g.Lines = append(g.Lines, l)
+	}
+
+	// Pre-calculate stacked lines if requested
+	if opts.Stacked {
+		stackLines(g.Lines)
 	}
 
 	yMin, yMax := computeYBounds(g.Lines)
