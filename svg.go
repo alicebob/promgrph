@@ -24,11 +24,16 @@ func renderSVG(w io.Writer, g Graph) {
 	legendX := leftPad + graphWidth + legendGap
 
 	// renderPoint translates data coordinates to pixel coordinates in the graph area
+	// Clamps yVal to YAxis range
 	renderPoint := func(xVal, yVal int) (int, int) {
 		xRange := g.XAxis.End - g.XAxis.Start
 		yRange := g.YAxis.End - g.YAxis.Start
+
+		// Clamp yVal to YAxis range
+		clampedY := min(max(yVal, g.YAxis.Start), g.YAxis.End)
+
 		x := leftPad + ((xVal - g.XAxis.Start) * graphWidth / xRange)
-		y := graphTop + graphHeight - ((yVal - g.YAxis.Start) * graphHeight / yRange)
+		y := graphTop + graphHeight - ((clampedY - g.YAxis.Start) * graphHeight / yRange)
 		return x, y
 	}
 

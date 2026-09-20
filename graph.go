@@ -7,14 +7,16 @@ import (
 
 type (
 	Graph struct {
-		Width   int
-		Height  int
-		Title   string
-		YAxis   Axis
-		XAxis   Axis
-		Stacked bool
-		Step    int // query step in seconds, for gap detection
-		Lines   []Line
+		Width     int
+		Height    int
+		Title     string
+		YAxis     Axis
+		XAxis     Axis
+		Stacked   bool
+		FixedYMin *int
+		FixedYMax *int
+		Step      int // query step in seconds, for gap detection
+		Lines     []Line
 	}
 	Axis struct {
 		Label string

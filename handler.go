@@ -18,9 +18,11 @@ var colorScheme = []string{
 }
 
 type GraphOpts struct {
-	Title   string
-	Stacked bool
-	Legend  string // default if empty, otherwise something fixed
+	Title     string
+	Stacked   bool
+	Legend    string // default if empty, otherwise something fixed
+	FixedYMin *int
+	FixedYMax *int
 }
 
 // Returns the actual graphs.
@@ -130,11 +132,13 @@ func makeGraph(ctx context.Context, c *Client, q promQuery, opts GraphOpts, widt
 	}
 
 	g := Graph{
-		Width:   width,
-		Height:  height,
-		Title:   opts.Title,
-		Stacked: opts.Stacked,
-		Step:    int(q.Step.Seconds()),
+		Width:     width,
+		Height:    height,
+		Title:     opts.Title,
+		Stacked:   opts.Stacked,
+		Step:      int(q.Step.Seconds()),
+		FixedYMin: opts.FixedYMin,
+		FixedYMax: opts.FixedYMax,
 		XAxis: Axis{
 			Start: int(q.Start.Unix()),
 			End:   int(q.End.Unix()),
@@ -170,6 +174,14 @@ func makeGraph(ctx context.Context, c *Client, q promQuery, opts GraphOpts, widt
 	}
 
 	yMin, yMax := computeYBounds(g.Lines)
+
+	if g.FixedYMin != nil {
+		yMin = *g.FixedYMin
+	}
+	if g.FixedYMax != nil {
+		yMax = *g.FixedYMax
+	}
+
 	ticks := niceTicks(yMin, yMax, 5)
 
 	// Adjust YAxis range to cover all ticks (niceTicks may extend beyond data)

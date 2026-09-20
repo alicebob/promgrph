@@ -20,9 +20,11 @@ func main() {
 	m.Handle("GET /graph.svg", c.MakeSVGHandler(
 		"up",
 		promgrph.GraphOpts{
-			Title:   "<b>up</b>",
-			Stacked: true,
-			Legend:  "Up!<b>b",
+			Title:     "<b>up</b>",
+			Stacked:   true,
+			Legend:    "Up!<b>b",
+			FixedYMin: new(0),
+			FixedYMax: new(10),
 		},
 	))
 	m.Handle("GET /alloc.svg", c.MakeSVGHandler(
