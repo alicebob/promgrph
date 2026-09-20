@@ -25,13 +25,16 @@ func main() {
 			Legend:    "Up!<b>b",
 			FixedYMin: new(0),
 			FixedYMax: new(10),
+			Fill:      50,
 		},
 	))
 	m.Handle("GET /alloc.svg", c.MakeSVGHandler(
 		"go_memstats_alloc_bytes",
 		promgrph.GraphOpts{
-			Title:  "alloc",
-			Legend: ">{{.instance}}<",
+			Title:   "alloc",
+			Legend:  ">{{.instance}}<",
+			Fill:    100,
+			Stacked: true,
 		},
 	))
 	m.Handle("GET /free.svg", c.MakeSVGHandler(

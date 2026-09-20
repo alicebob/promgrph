@@ -17,6 +17,7 @@ type (
 		FixedYMax *int
 		Step      int // query step in seconds, for gap detection
 		Lines     []Line
+		Fill      int // 0..100, alpha value of any area fill.
 	}
 	Axis struct {
 		Label string
@@ -30,7 +31,6 @@ type (
 	}
 	Line struct {
 		Color  string
-		Fill   bool // fill in the area under the line?
 		Label  string
 		Points Section
 	}
@@ -139,16 +139,17 @@ func interp(v, inMin, inMax float64, outMin, outMax int) int {
 }
 
 // stackLines pre-calculates stacked line values.
-// It modifies the lines in place, adding each line's Y values to the previous lines.
+// It modifies the lines in place, adding each line's Y values to the next lines.
+// After stacking, line 0 will have the tallest (cumulative) values.
 // All lines must have the same number of points at the same X positions.
 func stackLines(lines []Line) {
-	for i := 1; i < len(lines); i++ {
-		prev := &lines[i-1]
+	// Work from the end: each line accumulates all lines after it
+	for i := len(lines) - 2; i >= 0; i-- {
 		curr := &lines[i]
-		// Stack current line on top of previous line
+		next := &lines[i+1]
 		for j := range curr.Points {
-			if j < len(prev.Points) {
-				curr.Points[j][1] += prev.Points[j][1]
+			if j < len(next.Points) {
+				curr.Points[j][1] += next.Points[j][1]
 			}
 		}
 	}

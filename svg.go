@@ -112,41 +112,47 @@ func renderSVG(w io.Writer, g Graph) {
 
 		// Draw area shading first (bottom layer): 1-pixel-wide column from point down to X axis
 		// Only draw when x increases to avoid overlapping measurements
-		lastShadedX := -1
-		for _, p := range line.Points {
-			x, y := renderPoint(p[0], p[1])
-			if x > lastShadedX {
-				lastShadedX = x
-				fmt.Fprintf(w, `  <rect x="%d" y="%d" width="1" height="%d" fill="%s" fill-opacity="0.2"/>
+		if g.Fill > 0 {
+			lastShadedX := -1
+			for _, p := range line.Points {
+				x, y := renderPoint(p[0], p[1])
+				if x > lastShadedX {
+					lastShadedX = x
+					fmt.Fprintf(w, `  <rect x="%d" y="%d" width="1" height="%d" fill="%s" fill-opacity="%0.2f" shape-rendering="crispEdges"/>
 `,
-					x, y, graphBottom-y, line.Color)
+						x, y, graphBottom-y, line.Color,
+						float64(g.Fill)/100,
+					)
+				}
 			}
 		}
 
 		// Draw the path on top of shading, connecting measurements unless there's a gap
 		fmt.Fprintf(w, "  <path class=\"line\" stroke=\"%s\" stroke-width=\"1\" fill=\"none\" d=\"", line.Color)
 		first := true
+		var prevY int
 		for i, p := range line.Points {
 			x, y := renderPoint(p[0], p[1])
 			if first {
+				// First point: move to x,y
 				fmt.Fprintf(w, "M %d %d", x, y)
 				first = false
+				prevY = y
 			} else {
 				// Break line if X values differ by more than the query step
 				if p[0]-line.Points[i-1][0] > max(1, g.Step) {
-					fmt.Fprintf(w, " M %d %d", x, y)
+					// Gap detected, start new path
+					fmt.Fprintf(w, "M %d %d", x, y)
+					prevY = y
 				} else {
-					fmt.Fprintf(w, " L %d %d", x, y)
+					// Draw horizontal line from prev to (x, prevY), then vertical to (x, y)
+					fmt.Fprintf(w, " L %d %d L %d %d", x, prevY, x, y)
+					prevY = y
 				}
 			}
 		}
 		fmt.Fprintf(w, "\"/>\n")
 
-		// Also draw 1x1 pixels at each point
-		for _, p := range line.Points {
-			x, y := renderPoint(p[0], p[1])
-			fmt.Fprintf(w, "  <rect x=\"%d\" y=\"%d\" width=\"1\" height=\"1\" fill=\"%s\"/>\n", x, y, line.Color)
-		}
 	}
 
 	// Draw legend on the right

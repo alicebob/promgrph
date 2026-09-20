@@ -21,6 +21,7 @@ type GraphOpts struct {
 	Title     string
 	Stacked   bool
 	Legend    string // default if empty, otherwise something fixed
+	Fill      int    // 0..100% fill in the area under the graph.
 	FixedYMin *int
 	FixedYMax *int
 }
@@ -139,6 +140,7 @@ func makeGraph(ctx context.Context, c *Client, q promQuery, opts GraphOpts, widt
 		Step:      int(q.Step.Seconds()),
 		FixedYMin: opts.FixedYMin,
 		FixedYMax: opts.FixedYMax,
+		Fill:      opts.Fill,
 		XAxis: Axis{
 			Start: int(q.Start.Unix()),
 			End:   int(q.End.Unix()),
@@ -149,7 +151,6 @@ func makeGraph(ctx context.Context, c *Client, q promQuery, opts GraphOpts, widt
 	for i, r := range resp {
 		l := Line{
 			Color: colorScheme[i%len(colorScheme)],
-			Fill:  true,
 			Label: makeLabel(opts.Legend, r.Metric),
 		}
 		var s Section
