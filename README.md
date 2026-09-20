@@ -1,4 +1,4 @@
-Embedabble (mostly) prometheus/victoria server side graphs.
+Embedable prometheus/victoria server side graphs.
 
 Goal:
  - server connects to prometheus
@@ -9,10 +9,9 @@ Goal:
 
 ## Status
 
-Don't use, minimal proof of concept. You can get some basic graphs, and the template idea works, but that's it.
+It's minimal, but it mostly works.
 
 
 ## AI
-
 
 Big picture is old fashioned manual work, but Mistral filled in details (esp the svg rendering).
