@@ -54,11 +54,7 @@ func (c *Client) MakeSVGHandler(expr string, opts GraphOpts) http.HandlerFunc {
 		if graphWidth <= 0 {
 			graphWidth = 400
 		}
-		step := delta / time.Duration(graphWidth)
-		// Ensure minimum step of 1 second
-		if step < time.Second {
-			step = time.Second
-		}
+		step := max(time.Second, delta/time.Duration(graphWidth))
 		q := promQuery{
 			Expr:  expr,
 			Start: now.Add(-delta),
@@ -75,13 +71,7 @@ func (c *Client) MakeSVGHandler(expr string, opts GraphOpts) http.HandlerFunc {
 		}
 
 		var buf bytes.Buffer
-		if err := renderSVG(&buf, g); err != nil {
-			slog.ErrorContext(ctx, "svg rendering failed", "error", err)
-			w.Header().Set("Content-Type", "image/svg+xml")
-			// w.WriteHeader(500)
-			w.Write(errorSVG(width, height))
-			return
-		}
+		renderSVG(&buf, g)
 		w.Header().Set("Content-Type", "image/svg+xml")
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", buf.Len()))
 		w.Write(buf.Bytes())
@@ -144,6 +134,7 @@ func makeGraph(ctx context.Context, c *Client, q promQuery, opts GraphOpts, widt
 		Height:  height,
 		Title:   opts.Title,
 		Stacked: opts.Stacked,
+		Step:    int(q.Step.Seconds()),
 		XAxis: Axis{
 			Start: int(q.Start.Unix()),
 			End:   int(q.End.Unix()),

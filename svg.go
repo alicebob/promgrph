@@ -6,7 +6,7 @@ import (
 	"io"
 )
 
-func renderSVG(w io.Writer, g Graph) error {
+func renderSVG(w io.Writer, g Graph) {
 	const (
 		leftPad     = 60
 		topPad      = 30
@@ -23,7 +23,16 @@ func renderSVG(w io.Writer, g Graph) error {
 	graphBottom := g.Height - bottomPad
 	legendX := leftPad + graphWidth + legendGap
 
-	_, err := fmt.Fprintf(w, `<?xml version="1.0" encoding="UTF-8"?>
+	// renderPoint translates data coordinates to pixel coordinates in the graph area
+	renderPoint := func(xVal, yVal int) (int, int) {
+		xRange := g.XAxis.End - g.XAxis.Start
+		yRange := g.YAxis.End - g.YAxis.Start
+		x := leftPad + ((xVal - g.XAxis.Start) * graphWidth / xRange)
+		y := graphTop + graphHeight - ((yVal - g.YAxis.Start) * graphHeight / yRange)
+		return x, y
+	}
+
+	fmt.Fprintf(w, `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">
   <style>
     .background { fill: #ffffff; }
@@ -42,18 +51,12 @@ func renderSVG(w io.Writer, g Graph) error {
 		g.Width, g.Height,
 		g.Width/2, html.EscapeString(g.Title),
 	)
-	if err != nil {
-		return err
-	}
 
 	// Draw Y axis
-	_, err = fmt.Fprintf(w, `<g class="axis">
+	fmt.Fprintf(w, `<g class="axis">
     <line x1="%d" y1="%d" x2="%d" y2="%d"/>
   </g>
 `, leftPad, graphTop, leftPad, graphBottom)
-	if err != nil {
-		return err
-	}
 
 	// Draw Y axis ticks
 	for _, tick := range g.YAxis.Ticks {
@@ -62,26 +65,20 @@ func renderSVG(w io.Writer, g Graph) error {
 		if label == "" {
 			label = fmt.Sprintf("%d", tick.V)
 		}
-		_, err = fmt.Fprintf(w, `
+		fmt.Fprintf(w, `
     <g class="tick">
       <line x1="%d" y1="%d" x2="%d" y2="%d"/>
       <text x="%d" y="%d" style="text-anchor: end">%s</text>
     </g>`,
 			leftPad-5, yPos, leftPad, yPos,
 			leftPad-10, yPos+4, label)
-		if err != nil {
-			return err
-		}
 	}
 
 	// Draw X axis
-	_, err = fmt.Fprintf(w, `<g class="axis">
+	fmt.Fprintf(w, `<g class="axis">
     <line x1="%d" y1="%d" x2="%d" y2="%d"/>
   </g>
 `, leftPad, graphBottom, leftPad+graphWidth, graphBottom)
-	if err != nil {
-		return err
-	}
 
 	// Draw X axis ticks
 	for _, tick := range g.XAxis.Ticks {
@@ -90,25 +87,18 @@ func renderSVG(w io.Writer, g Graph) error {
 		if label == "" {
 			label = fmt.Sprintf("%d", tick.V)
 		}
-		_, err = fmt.Fprintf(w, `
+		fmt.Fprintf(w, `
     <g class="tick">
       <line x1="%d" y1="%d" x2="%d" y2="%d"/>
       <text x="%d" y="%d">%s</text>
     </g>`,
 			xPos, graphBottom, xPos, graphBottom+5,
 			xPos, graphBottom+20, label)
-		if err != nil {
-			return err
-		}
 	}
 
 	// Draw lines
-	xRange := g.XAxis.End - g.XAxis.Start
-	yRange := g.YAxis.End - g.YAxis.Start
-
 	// Note: Stacked lines are pre-calculated in graph.go via stackLines()
 	// SVG draws lines between measurements, breaking only when measurements are missing
-
 	for _, line := range g.Lines {
 		// Skip empty lines
 		if len(line.Points) == 0 {
@@ -119,64 +109,45 @@ func renderSVG(w io.Writer, g Graph) error {
 		// Only draw when x increases to avoid overlapping measurements
 		lastShadedX := -1
 		for _, p := range line.Points {
-			x := leftPad + ((p[0] - g.XAxis.Start) * graphWidth / xRange)
-			y := graphTop + graphHeight - ((p[1] - g.YAxis.Start) * graphHeight / yRange)
+			x, y := renderPoint(p[0], p[1])
 			if x > lastShadedX {
 				lastShadedX = x
-				_, err = fmt.Fprintf(w, `  <rect x="%d" y="%d" width="1" height="%d" fill="%s" fill-opacity="0.2"/>
+				fmt.Fprintf(w, `  <rect x="%d" y="%d" width="1" height="%d" fill="%s" fill-opacity="0.2"/>
 `,
 					x, y, graphBottom-y, line.Color)
-				if err != nil {
-					return err
-				}
 			}
 		}
-		
+
 		// Draw the path on top of shading, connecting measurements unless there's a gap
-		_, err = fmt.Fprintf(w, "  <path class=\"line\" stroke=\"%s\" stroke-width=\"1\" fill=\"none\" d=\"", line.Color)
-		if err != nil {
-			return err
-		}
+		fmt.Fprintf(w, "  <path class=\"line\" stroke=\"%s\" stroke-width=\"1\" fill=\"none\" d=\"", line.Color)
 		first := true
 		for i, p := range line.Points {
-			x := leftPad + ((p[0] - g.XAxis.Start) * graphWidth / xRange)
-			y := graphTop + graphHeight - ((p[1] - g.YAxis.Start) * graphHeight / yRange)
-			
+			x, y := renderPoint(p[0], p[1])
 			if first {
-				_, err = fmt.Fprintf(w, "M %d %d", x, y)
+				fmt.Fprintf(w, "M %d %d", x, y)
 				first = false
 			} else {
-				// If x-axis values are not consecutive, there's a missing measurement -> break line
-				if p[0] - line.Points[i-1][0] > 1 {
-					_, err = fmt.Fprintf(w, " M %d %d", x, y)
+				// Break line if X values differ by more than the query step
+				if p[0]-line.Points[i-1][0] > max(1, g.Step) {
+					fmt.Fprintf(w, " M %d %d", x, y)
 				} else {
-					_, err = fmt.Fprintf(w, " L %d %d", x, y)
+					fmt.Fprintf(w, " L %d %d", x, y)
 				}
 			}
-			if err != nil {
-				return err
-			}
 		}
-		_, err = fmt.Fprintf(w, "\"/>\n")
-		if err != nil {
-			return err
-		}
-		
+		fmt.Fprintf(w, "\"/>\n")
+
 		// Also draw 1x1 pixels at each point
 		for _, p := range line.Points {
-			x := leftPad + ((p[0] - g.XAxis.Start) * graphWidth / xRange)
-			y := graphTop + graphHeight - ((p[1] - g.YAxis.Start) * graphHeight / yRange)
-			_, err = fmt.Fprintf(w, "  <rect x=\"%d\" y=\"%d\" width=\"1\" height=\"1\" fill=\"%s\"/>\n", x, y, line.Color)
-			if err != nil {
-				return err
-			}
+			x, y := renderPoint(p[0], p[1])
+			fmt.Fprintf(w, "  <rect x=\"%d\" y=\"%d\" width=\"1\" height=\"1\" fill=\"%s\"/>\n", x, y, line.Color)
 		}
 	}
 
 	// Draw legend on the right
 	legendBgHeight := g.Height - topPad - bottomPad
 	legendY := graphTop + legendPadY
-	_, err = fmt.Fprintf(w, `
+	fmt.Fprintf(w, `
   <defs>
     <clipPath id="legendClip">
       <rect x="%d" y="%d" width="%d" height="%d" rx="4" ry="4"/>
@@ -187,14 +158,11 @@ func renderSVG(w io.Writer, g Graph) error {
 `,
 		legendX, graphTop, legendWidth, legendBgHeight,
 		legendX, graphTop, legendWidth, legendBgHeight)
-	if err != nil {
-		return err
-	}
 	for _, line := range g.Lines {
 		if line.Label == "" {
 			continue
 		}
-		_, err = fmt.Fprintf(w, `
+		fmt.Fprintf(w, `
     <g class="legend">
       <rect class="legend-color" x="%d" y="%d" rx="2" ry="2" fill="%s"/>
       <text x="%d" y="%d" style="text-anchor: start; dominant-baseline: central">%s</text>
@@ -203,16 +171,8 @@ func renderSVG(w io.Writer, g Graph) error {
 			legendX+24, legendY+6,
 			html.EscapeString(line.Label),
 		)
-		if err != nil {
-			return err
-		}
 		legendY += 20
 	}
-	_, err = fmt.Fprintf(w, "\n  </g>")
-	if err != nil {
-		return err
-	}
-
-	_, err = fmt.Fprint(w, `</svg>`)
-	return err
+	fmt.Fprintf(w, "\n  </g>")
+	fmt.Fprint(w, `</svg>`)
 }

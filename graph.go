@@ -13,6 +13,7 @@ type (
 		YAxis   Axis
 		XAxis   Axis
 		Stacked bool
+		Step    int // query step in seconds, for gap detection
 		Lines   []Line
 	}
 	Axis struct {

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -70,17 +71,30 @@ func NewFakePromWithGaps(t *testing.T) *FakeProm {
 		// Timestamps are relative to the query start time
 		start := r.FormValue("start")
 		_ = r.FormValue("end")
+		// First series: 3 points at 2, 10, 20, then gap, then 30 points in 3 segments
+		// Segment 1: 302-311 with value 4
+		// Segment 2: 312-321 with value 7
+		// Segment 3: 322-331 with value 6
+		vals := []string{}
+		for i := 302; i <= 311; i++ {
+			vals = append(vals, fmt.Sprintf("[%.0f,\"4\"]", toFloat(start, i)))
+		}
+		for i := 312; i <= 321; i++ {
+			vals = append(vals, fmt.Sprintf("[%.0f,\"7\"]", toFloat(start, i)))
+		}
+		for i := 322; i <= 331; i++ {
+			vals = append(vals, fmt.Sprintf("[%.0f,\"6\"]", toFloat(start, i)))
+		}
+		valStr := strings.Join(vals, ",")
+
 		ts0 := toFloat(start, 2)
 		ts1 := toFloat(start, 10)
 		ts2 := toFloat(start, 20)
-		ts3 := toFloat(start, 302)
-		ts4 := toFloat(start, 313)
-		ts5 := toFloat(start, 334)
 		w.Write([]byte(fmt.Sprintf(`{"status":"success","data":{"resultType":"matrix","result":[
-{"metric":{"__name__":"up","job":"test","instance":"localhost:9090"},"values":[[%.0f,"1"],[%.0f,"2"],[%.0f,"3"],[%.0f,"4"],[%.0f,"5"],[%.0f,"6"]]},
+{"metric":{"__name__":"up","job":"test","instance":"localhost:9090"},"values":[[%.0f,"1"],[%.0f,"2"],[%.0f,"3"],%s]},
 {"metric":{"__name__":"up","job":"test","instance":"localhost:9091"},"values":[[%.0f,"1"],[%.0f,"2"]]}
 ]}}`,
-			ts0, ts1, ts2, ts3, ts4, ts5,
+			ts0, ts1, ts2, valStr,
 			ts0, ts1,
 		)))
 	})
