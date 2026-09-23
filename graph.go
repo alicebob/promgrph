@@ -13,20 +13,20 @@ type (
 		YAxis     Axis
 		XAxis     Axis
 		Stacked   bool
-		FixedYMin *int
-		FixedYMax *int
+		FixedYMin *float64
+		FixedYMax *float64
 		Step      int // query step in seconds, for gap detection
 		Lines     []Line
 		Fill      int // 0..100, alpha value of any area fill.
 	}
 	Axis struct {
 		Label string
-		Start int
-		End   int
+		Start float64
+		End   float64
 		Ticks []AxisTick
 	}
 	AxisTick struct {
-		V     int
+		V     float64
 		Label string
 	}
 	Line struct {
@@ -34,12 +34,13 @@ type (
 		Label  string
 		Points Section
 	}
-	Section [][2]int
+	Section [][2]float64
 )
 
-// formatValue formats an integer as a compact string.
+// formatValue formats a float64 as a compact string.
 // Uses suffixes K, M, B, T for large numbers.
-func formatValue(v int) string {
+// For small numbers, formats with reasonable precision.
+func formatValue(v float64) string {
 	if v < 0 {
 		return "-" + formatValue(-v)
 	}
@@ -53,15 +54,25 @@ func formatValue(v int) string {
 
 	switch {
 	case v >= T:
-		return fmt.Sprintf("%.1fT", float64(v)/T)
+		return fmt.Sprintf("%.1fT", v/T)
 	case v >= B:
-		return fmt.Sprintf("%.1fB", float64(v)/B)
+		return fmt.Sprintf("%.1fB", v/B)
 	case v >= M:
-		return fmt.Sprintf("%.1fM", float64(v)/M)
+		return fmt.Sprintf("%.1fM", v/M)
 	case v >= K:
-		return fmt.Sprintf("%.1fK", float64(v)/K)
+		return fmt.Sprintf("%.1fK", v/K)
 	default:
-		return fmt.Sprintf("%d", v)
+		// For small numbers, format nicely
+		// If it's a whole number, don't show decimal
+		if v == float64(int64(v)) {
+			return fmt.Sprintf("%d", int64(v))
+		}
+		// For numbers < 1, show up to 3 decimal places
+		if v < 1 {
+			return fmt.Sprintf("%.3g", v)
+		}
+		// For numbers between 1 and 1000, show up to 2 decimal places
+		return fmt.Sprintf("%.2g", v)
 	}
 }
 
@@ -100,7 +111,7 @@ func niceNum(n float64, round bool) float64 {
 
 // niceTicks generates nice Y-axis ticks for a given range.
 // Returns round-numbered ticks, evenly spaced, covering [vmin, vmax].
-func niceTicks(vmin, vmax int, maxTicks int) []AxisTick {
+func niceTicks(vmin, vmax float64, maxTicks int) []AxisTick {
 	if vmin == vmax {
 		return []AxisTick{
 			{V: vmin - 1, Label: formatValue(vmin - 1)},
@@ -109,8 +120,8 @@ func niceTicks(vmin, vmax int, maxTicks int) []AxisTick {
 		}
 	}
 
-	minVal := float64(vmin)
-	maxVal := float64(vmax)
+	minVal := vmin
+	maxVal := vmax
 	rng := maxVal - minVal
 
 	// Target ~5-10 ticks
@@ -118,24 +129,25 @@ func niceTicks(vmin, vmax int, maxTicks int) []AxisTick {
 	if step == 0 {
 		step = niceNum(rng, false)
 	}
-	// Ensure step is at least 1 for integer values
-	if step < 1 {
-		step = 1
+	// Ensure step is at least a reasonable minimum for float values
+	if step < 0.001 {
+		step = 0.001
 	}
 
 	niceMin := math.Floor(minVal/step) * step
 	niceMax := math.Ceil(maxVal/step) * step
 
 	var ticks []AxisTick
-	for v := niceMin; v <= niceMax+0.5; v += step {
-		ticks = append(ticks, AxisTick{V: int(math.Round(v)), Label: formatValue(int(math.Round(v)))})
+	for v := niceMin; v <= niceMax+step*0.5; v += step {
+		rounded := math.Round(v*1000) / 1000 // Round to 3 decimal places to avoid floating point artifacts
+		ticks = append(ticks, AxisTick{V: rounded, Label: formatValue(rounded)})
 	}
 
 	return ticks
 }
 
-func interp(v, inMin, inMax float64, outMin, outMax int) int {
-	return outMin + int((v-inMin)*float64(outMax-outMin)/(inMax-inMin))
+func interp(v, inMin, inMax float64, outMin, outMax float64) float64 {
+	return outMin + (v-inMin)*float64(outMax-outMin)/(inMax-inMin)
 }
 
 // stackLines pre-calculates stacked line values.
@@ -156,9 +168,9 @@ func stackLines(lines []Line) {
 }
 
 // computeYBounds returns the minimum and maximum Y values from the lines.
-// If all values are the same, it adds padding (±1) to avoid division by zero.
+// If all values are the same, it adds padding (±epsilon) to avoid division by zero.
 // If there are no points, it returns (0, 1).
-func computeYBounds(lines []Line) (yMin, yMax int) {
+func computeYBounds(lines []Line) (yMin, yMax float64) {
 	found := false
 	for _, l := range lines {
 		for _, p := range l.Points {
@@ -175,7 +187,15 @@ func computeYBounds(lines []Line) (yMin, yMax int) {
 		return 0, 1
 	}
 	if yMin == yMax {
-		return yMin - 1, yMax + 1
+		// Add padding based on the value magnitude
+		padding := 1.0
+		if yMin != 0 {
+			padding = math.Abs(yMin) * 0.1
+			if padding < 0.01 {
+				padding = 0.01
+			}
+		}
+		return yMin - padding, yMax + padding
 	}
 	return yMin, yMax
 }

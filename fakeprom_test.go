@@ -110,3 +110,40 @@ func toFloat(s string, offset int) float64 {
 	v, _ := strconv.Atoi(s)
 	return float64(v + offset)
 }
+
+func NewFakePromWithFloats(t *testing.T) *FakeProm {
+	m := http.NewServeMux()
+	m.HandleFunc("GET /api/v1/query_range", func(w http.ResponseWriter, r *http.Request) {
+		start := r.FormValue("start")
+		_ = r.FormValue("end")
+		ts0 := toFloat(start, 0)
+		ts1 := toFloat(start, 15)
+		ts2 := toFloat(start, 30)
+		w.Write([]byte(fmt.Sprintf(`{
+   "status" : "success",
+   "data" : {
+      "resultType" : "matrix",
+      "result" : [
+         {
+            "metric" : {
+               "__name__" : "cpu_usage",
+               "job" : "prometheus"
+            },
+            "values" : [
+               [ %.0f, "0.75" ],
+               [ %.0f, "0.80" ],
+               [ %.0f, "0.65" ]
+            ]
+         }
+      ]
+   }
+}`,
+		ts0, ts1, ts2)))
+	})
+	s := httptest.NewServer(m)
+	t.Cleanup(func() { s.Close() })
+
+	return &FakeProm{
+		URL: s.URL,
+	}
+}

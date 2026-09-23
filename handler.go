@@ -128,7 +128,7 @@ func makeGraph(ctx context.Context, c *Client, q promQuery, opts GraphOpts, widt
 	period, format := nicePeriod(q.End.Sub(q.Start))
 	for t := q.Start.Truncate(period); !t.After(q.End); t = t.Add(period) {
 		if !t.Before(q.Start) {
-			xTicks = append(xTicks, AxisTick{int(t.Unix()), t.Format(format)})
+			xTicks = append(xTicks, AxisTick{V: float64(t.Unix()), Label: t.Format(format)})
 		}
 	}
 
@@ -138,15 +138,22 @@ func makeGraph(ctx context.Context, c *Client, q promQuery, opts GraphOpts, widt
 		Title:     opts.Title,
 		Stacked:   opts.Stacked,
 		Step:      int(q.Step.Seconds()),
-		FixedYMin: opts.FixedYMin,
-		FixedYMax: opts.FixedYMax,
 		Fill:      opts.Fill,
 		XAxis: Axis{
-			Start: int(q.Start.Unix()),
-			End:   int(q.End.Unix()),
+			Start: float64(q.Start.Unix()),
+			End:   float64(q.End.Unix()),
 			Label: "Time!",
 			Ticks: xTicks,
 		},
+	}
+	// Convert FixedYMin and FixedYMax from *int to *float64
+	if opts.FixedYMin != nil {
+		fymin := float64(*opts.FixedYMin)
+		g.FixedYMin = &fymin
+	}
+	if opts.FixedYMax != nil {
+		fymax := float64(*opts.FixedYMax)
+		g.FixedYMax = &fymax
 	}
 	for i, r := range resp {
 		l := Line{
@@ -155,15 +162,19 @@ func makeGraph(ctx context.Context, c *Client, q promQuery, opts GraphOpts, widt
 		}
 		var s Section
 		for _, v := range r.Values {
-			val, _ := strconv.Atoi(v[1].(string))
+			val, err := strconv.ParseFloat(v[1].(string), 64)
+			if err != nil {
+				// Fallback to 0 if parsing fails
+				val = 0
+			}
 			x := interp(
 				v[0].(float64),
 				float64(q.Start.Unix()),
 				float64(q.End.Unix()),
-				g.XAxis.Start,
-				g.XAxis.End,
+				float64(g.XAxis.Start),
+				float64(g.XAxis.End),
 			)
-			s = append(s, [2]int{x, val})
+			s = append(s, [2]float64{x, val})
 		}
 		l.Points = s
 		g.Lines = append(g.Lines, l)

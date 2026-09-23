@@ -8,7 +8,7 @@ import (
 
 func TestFormatValue(t *testing.T) {
 	tests := []struct {
-		v    int
+		v    float64
 		want string
 	}{
 		{0, "0"},
@@ -20,6 +20,11 @@ func TestFormatValue(t *testing.T) {
 		{50000000, "50.0M"},
 		{1000000000, "1.0B"},
 		{-5000000, "-5.0M"},
+		{0.5, "0.5"},
+		{0.123, "0.123"},
+		{0.001, "0.001"},
+		{1.5, "1.5"},
+		{1234.567, "1.2K"},
 	}
 
 	for _, tt := range tests {
@@ -33,51 +38,51 @@ func TestFormatValue(t *testing.T) {
 func TestNiceTicks(t *testing.T) {
 	tests := []struct {
 		name       string
-		vmin, vmax int
+		vmin, vmax float64
 		maxTicks   int
-		want       []int // just check the V values
+		want       []float64 // just check the V values
 	}{
 		{
 			name:     "zero range",
 			vmin:     5,
 			vmax:     5,
 			maxTicks: 5,
-			want:     []int{4, 5, 6},
+			want:     []float64{4, 5, 6},
 		},
 		{
 			name:     "small range 0-1",
 			vmin:     0,
 			vmax:     1,
 			maxTicks: 5,
-			want:     []int{0, 1},
+			want:     []float64{0, 0.2, 0.4, 0.6, 0.8, 1},
 		},
 		{
 			name:     "0-5",
 			vmin:     0,
 			vmax:     5,
 			maxTicks: 5,
-			want:     []int{0, 1, 2, 3, 4, 5},
+			want:     []float64{0, 1, 2, 3, 4, 5},
 		},
 		{
 			name:     "0-50M",
 			vmin:     0,
 			vmax:     50_000_000,
 			maxTicks: 5,
-			want:     []int{0, 10_000_000, 20_000_000, 30_000_000, 40_000_000, 50_000_000},
+			want:     []float64{0, 10_000_000, 20_000_000, 30_000_000, 40_000_000, 50_000_000},
 		},
 		{
 			name:     "17-42",
 			vmin:     17,
 			vmax:     42,
 			maxTicks: 5,
-			want:     []int{15, 20, 25, 30, 35, 40, 45},
+			want:     []float64{15, 20, 25, 30, 35, 40, 45},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ticks := niceTicks(tt.vmin, tt.vmax, tt.maxTicks)
-			var got []int
+			var got []float64
 			for _, tick := range ticks {
 				got = append(got, tick.V)
 			}
@@ -87,13 +92,13 @@ func TestNiceTicks(t *testing.T) {
 }
 
 func TestComputeYBounds(t *testing.T) {
-	pt := func(x, y int) [2]int { return [2]int{x, y} }
+	pt := func(x, y float64) [2]float64 { return [2]float64{x, y} }
 
 	tests := []struct {
 		name    string
 		lines   []Line
-		wantMin int
-		wantMax int
+		wantMin float64
+		wantMax float64
 	}{
 		{
 			name:    "empty lines",
@@ -104,14 +109,14 @@ func TestComputeYBounds(t *testing.T) {
 		{
 			name:    "single point",
 			lines:   []Line{{Points: Section{pt(0, 5)}}},
-			wantMin: 4,
-			wantMax: 6,
+			wantMin: 4.5,
+			wantMax: 5.5,
 		},
 		{
 			name:    "all same values",
 			lines:   []Line{{Points: Section{pt(0, 3), pt(1, 3), pt(2, 3)}}},
-			wantMin: 2,
-			wantMax: 4,
+			wantMin: 2.7,
+			wantMax: 3.3,
 		},
 		{
 			name:    "mixed values",
@@ -131,14 +136,22 @@ func TestComputeYBounds(t *testing.T) {
 			wantMin: 1,
 			wantMax: 4,
 		},
+		{
+			name:    "float values",
+			lines:   []Line{{Points: Section{pt(0, 0.5), pt(1, 0.75), pt(2, 0.25)}}},
+			wantMin: 0.25,
+			wantMax: 0.75,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Helper()
 			gotMin, gotMax := computeYBounds(tt.lines)
-			must.Eq(t, tt.wantMin, gotMin)
-			must.Eq(t, tt.wantMax, gotMax)
+			// Use approximate comparison for float values
+			if gotMin != tt.wantMin || gotMax != tt.wantMax {
+				t.Errorf("computeYBounds() = (%v, %v), want (%v, %v)", gotMin, gotMax, tt.wantMin, tt.wantMax)
+			}
 		})
 	}
 }

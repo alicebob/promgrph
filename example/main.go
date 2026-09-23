@@ -43,6 +43,12 @@ func main() {
 			Title: "frees",
 		},
 	))
+	m.Handle("GET /gc.svg", c.MakeSVGHandler(
+		"rate(go_gc_duration_seconds_count[5m])",
+		promgrph.GraphOpts{
+			Title: "GC",
+		},
+	))
 	m.HandleFunc("GET /", indexHandler(c))
 	fmt.Printf("at: %s\n", listen)
 	if err := (&http.Server{Handler: m, Addr: listen}).ListenAndServe(); err != nil {
@@ -61,6 +67,7 @@ func indexHandler(c *promgrph.Client) func(http.ResponseWriter, *http.Request) {
 	{{graph "/graph.svg" (width 600) (period "24h")}}<br>
 	{{graph "/alloc.svg" (width 800) (height 300) }}<br>
 	{{graph "/free.svg" (width 400) }}<br>
+	{{graph "/gc.svg" (width 400) }}<br>
 </body>
 </html>
 `)).Execute(w, nil)

@@ -25,15 +25,15 @@ func renderSVG(w io.Writer, g Graph) {
 
 	// renderPoint translates data coordinates to pixel coordinates in the graph area
 	// Clamps yVal to YAxis range
-	renderPoint := func(xVal, yVal int) (int, int) {
+	renderPoint := func(xVal, yVal float64) (int, int) {
 		xRange := g.XAxis.End - g.XAxis.Start
 		yRange := g.YAxis.End - g.YAxis.Start
 
 		// Clamp yVal to YAxis range
 		clampedY := min(max(yVal, g.YAxis.Start), g.YAxis.End)
 
-		x := leftPad + ((xVal - g.XAxis.Start) * graphWidth / xRange)
-		y := graphTop + graphHeight - ((clampedY - g.YAxis.Start) * graphHeight / yRange)
+		x := leftPad + int((xVal-g.XAxis.Start)*float64(graphWidth)/xRange)
+		y := graphTop + int(graphHeight) - int((clampedY-g.YAxis.Start)*float64(graphHeight)/yRange)
 		return x, y
 	}
 
@@ -65,10 +65,10 @@ func renderSVG(w io.Writer, g Graph) {
 
 	// Draw Y axis ticks
 	for _, tick := range g.YAxis.Ticks {
-		yPos := graphTop + graphHeight - ((tick.V - g.YAxis.Start) * graphHeight / (g.YAxis.End - g.YAxis.Start))
+		yPos := graphTop + int(graphHeight) - int((tick.V-g.YAxis.Start)*float64(graphHeight)/(g.YAxis.End-g.YAxis.Start))
 		label := tick.Label
 		if label == "" {
-			label = fmt.Sprintf("%d", tick.V)
+			label = fmt.Sprintf("%g", tick.V)
 		}
 		fmt.Fprintf(w, `
     <g class="tick">
@@ -87,10 +87,10 @@ func renderSVG(w io.Writer, g Graph) {
 
 	// Draw X axis ticks
 	for _, tick := range g.XAxis.Ticks {
-		xPos := leftPad + ((tick.V - g.XAxis.Start) * graphWidth / (g.XAxis.End - g.XAxis.Start))
+		xPos := leftPad + int((tick.V-g.XAxis.Start)*float64(graphWidth)/(g.XAxis.End-g.XAxis.Start))
 		label := tick.Label
 		if label == "" {
-			label = fmt.Sprintf("%d", tick.V)
+			label = fmt.Sprintf("%d", int(tick.V))
 		}
 		fmt.Fprintf(w, `
     <g class="tick">
@@ -140,7 +140,7 @@ func renderSVG(w io.Writer, g Graph) {
 				prevY = y
 			} else {
 				// Break line if X values differ by more than the query step
-				if p[0]-line.Points[i-1][0] > max(1, g.Step) {
+				if p[0]-line.Points[i-1][0] > float64(max(1, g.Step)) {
 					// Gap detected, start new path
 					fmt.Fprintf(w, "M %d %d", x, y)
 					prevY = y
